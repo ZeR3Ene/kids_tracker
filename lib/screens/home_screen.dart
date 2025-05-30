@@ -116,7 +116,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       // Also show a native phone notification
-      print('HomeScreen Log: Calling _showAppNotification for: $title');
       _showAppNotification(title, message, isAlert: isAlert);
     }
   }
@@ -1146,17 +1145,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed:
-                          () => _simulateSafeZoneChange(
-                            childId: 'child_1',
-                            isSafe: true,
-                          ), // Simulate inside safe zone
-                      child: const Text('Simulate Watch 1 Inside Safe Zone'),
+                      onPressed: _triggerSOSExample,
+                      child: const Text('Trigger SOS (Example Watch 1)'),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: _simulateLinaOutsideZone,
-                      child: const Text('Trigger SOS (Example Watch 1)'),
+                      child: const Text('Simulate Lina Outside Zone'),
                     ),
                   ],
                 ),
