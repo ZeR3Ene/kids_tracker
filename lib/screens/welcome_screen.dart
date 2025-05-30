@@ -40,8 +40,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final Color onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
     final Color onSecondaryColor = Theme.of(context).colorScheme.onSecondary;
     final Color textColor =
-        Theme.of(context).textTheme.bodyMedium?.color ??
-        Colors.black; 
+        Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black;
     final Color headlineColor =
         Theme.of(context).textTheme.headlineMedium?.color ?? Colors.black;
 
@@ -53,11 +52,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               Theme.of(context).colorScheme.surfaceVariant,
               Theme.of(context).colorScheme.surface,
             ]
-            : [
-              Color(0xFF7EE6D9),
-              Color(0xFFB2F7EF),
-              Color(0xFFFFF6F6),
-            ]; 
+            : [Color(0xFF7EE6D9), Color(0xFFB2F7EF), Color(0xFFFFF6F6)];
 
     return Scaffold(
       body: Stack(
@@ -65,7 +60,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: gradientColors, 
+                colors: gradientColors,
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -80,7 +75,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 context,
               ).colorScheme.onBackground.withOpacity(isDarkMode ? 0.1 : 0.25),
               size: 60,
-            ), 
+            ),
           ),
           Positioned(
             top: 100,
@@ -91,7 +86,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 context,
               ).colorScheme.onBackground.withOpacity(isDarkMode ? 0.1 : 0.18),
               size: 80,
-            ), 
+            ),
           ),
           Positioned(
             bottom: 0,
@@ -106,14 +101,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     isDarkMode ? 0.1 : 0.18,
                   ),
                   size: 80,
-                ), 
+                ),
                 Icon(
                   Icons.cloud,
                   color: Theme.of(context).colorScheme.onBackground.withOpacity(
                     isDarkMode ? 0.1 : 0.18,
                   ),
                   size: 60,
-                ), 
+                ),
               ],
             ),
           ),
@@ -132,18 +127,15 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Theme.of(context).shadowColor.withOpacity(
-                              0.4,
-                            ), 
+                            color: Theme.of(
+                              context,
+                            ).shadowColor.withOpacity(0.4),
                             blurRadius: 12,
                           ),
                         ],
                       ),
                       clipBehavior: Clip.hardEdge,
-                      child: Image.asset(
-                        'assets/logo.png',
-                        fit: BoxFit.cover,
-                      ), 
+                      child: Image.asset('assets/logo.png', fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(height: 32),
@@ -153,7 +145,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: primaryColor, 
+                      color: primaryColor,
                       letterSpacing: 1.2,
                     ),
                   ),
@@ -161,10 +153,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   Text(
                     'Peace of mind starts here. Track your kids easily and safely.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: textColor,
-                    ), 
+                    style: TextStyle(fontSize: 18, color: textColor),
                   ),
                   const Spacer(),
                   Padding(
@@ -175,24 +164,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           width: double.infinity,
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  primaryColor, 
-                              foregroundColor:
-                                  onPrimaryColor, 
+                              backgroundColor: primaryColor,
+                              foregroundColor: onPrimaryColor,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(32),
                               ),
                               padding: const EdgeInsets.symmetric(vertical: 18),
-                              textStyle: const TextStyle(
-                                fontSize: 18,
-                              ), 
+                              textStyle: const TextStyle(fontSize: 18),
                               elevation: 0,
                             ),
                             onPressed: () {
                               Navigator.pushNamed(context, '/login');
-                              _showSnackbar(
-                                'Welcome back!',
-                              ); 
+                              _showSnackbar('Welcome back!');
                             },
                             child: const Text('I have an account'),
                           ),
@@ -202,12 +185,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           width: double.infinity,
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor:
-                                  secondaryColor, 
-                              side: BorderSide(
-                                color: secondaryColor,
-                                width: 2,
-                              ), 
+                              foregroundColor: secondaryColor,
+                              side: BorderSide(color: secondaryColor, width: 2),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(32),
                               ),
@@ -215,13 +194,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               textStyle: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                              ), 
+                              ),
                             ),
                             onPressed: () {
                               Navigator.pushNamed(context, '/signup');
                               _showSnackbar(
                                 'Create a new account for your child!',
-                              ); 
+                              );
                             },
                             child: const Text('Create an account'),
                           ),

@@ -87,67 +87,55 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Sans',
-        scaffoldBackgroundColor: const Color(0xFF7EE6D9),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Color(0xFF7EE6D9),
-          primary: Color(0xFF7EE6D9),
-          secondary: Color(0xFFFF6F61),
+          seedColor: const Color(0xFF7EE6D9),
+          primary: const Color(0xFF7EE6D9),
+          secondary: const Color(0xFFFF6F61),
+          brightness: Brightness.light,
         ),
+        scaffoldBackgroundColor: const Color(0xFF7EE6D9),
         cardColor: Colors.white,
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF7EE6D9),
           foregroundColor: Colors.white,
         ),
         textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          bodyMedium: TextStyle(fontSize: 18, color: Colors.black),
+          bodyLarge: TextStyle(color: Colors.black87),
+          bodyMedium: TextStyle(color: Colors.black87),
+          titleLarge: TextStyle(color: Colors.black87),
         ),
-        useMaterial3: true,
       ),
       darkTheme: ThemeData(
         fontFamily: 'Sans',
-        scaffoldBackgroundColor: const Color(0xFF23272F),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Color(0xFF23272F),
-          primary: Color(0xFF23272F),
-          secondary: Color(0xFFFF6F61),
+          seedColor: const Color(0xFF2EC4B6),
+          primary: const Color(0xFF2EC4B6),
+          secondary: const Color(0xFFFF6F61),
           brightness: Brightness.dark,
         ),
-        cardColor: const Color(0xFF2C313A),
+        scaffoldBackgroundColor: const Color(0xFF121212),
+        cardColor: const Color(0xFF1E1E1E),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF23272F),
+          backgroundColor: Color(0xFF2EC4B6),
           foregroundColor: Colors.white,
         ),
         textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-          bodyMedium: TextStyle(fontSize: 18, color: Colors.white),
+          bodyLarge: TextStyle(color: Colors.white70),
+          bodyMedium: TextStyle(color: Colors.white70),
+          titleLarge: TextStyle(color: Colors.white70),
         ),
-        useMaterial3: true,
+        iconTheme: const IconThemeData(color: Colors.white70),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Color(0xFF2EC4B6),
+            foregroundColor: Colors.white,
+          ),
+        ),
       ),
       themeMode: themeMode,
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          } else if (snapshot.hasData) {
-            return const HomeScreen();
-          } else {
-            return const WelcomeScreen();
-          }
-        },
-      ),
+      home: const SplashScreen(),
       routes: {
+        '/welcome': (context) => const WelcomeScreen(),
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignupScreen(),
         '/home': (context) => const HomeScreen(),
@@ -158,6 +146,147 @@ class MyApp extends StatelessWidget {
         '/settings': (context) => const SettingsScreen(),
         '/generalSettings': (context) => const SettingsScreen(),
       },
+    );
+  }
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    _controller.forward();
+    _navigateToNextScreen();
+  }
+
+  void _navigateToNextScreen() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) {
+      final User? user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        Navigator.pushReplacementNamed(context, '/welcome');
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final List<Color> gradientColors = isDarkMode
+        ? [
+      Theme.of(context).scaffoldBackgroundColor,
+      Theme.of(context).colorScheme.surfaceVariant,
+      Theme.of(context).colorScheme.surface,
+    ]
+        : [
+      const Color(0xFF7EE6D9),
+      const Color(0xFFB2F7EF),
+      const Color(0xFFFFF6F6),
+    ];
+
+    return Scaffold(
+      body: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: gradientColors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 40,
+            left: 20,
+            child: Icon(
+              Icons.cloud,
+              color: Theme.of(context).colorScheme.onBackground.withOpacity(
+                isDarkMode ? 0.1 : 0.25,
+              ),
+              size: 60,
+            ),
+          ),
+          Positioned(
+            top: 100,
+            right: 30,
+            child: Icon(
+              Icons.cloud,
+              color: Theme.of(context).colorScheme.onBackground.withOpacity(
+                isDarkMode ? 0.1 : 0.18,
+              ),
+              size: 80,
+            ),
+          ),
+          FadeTransition(
+            opacity: _fadeAnim,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Hero(
+                    tag: 'app_logo',
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Theme.of(context).shadowColor.withOpacity(0.4),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.hardEdge,
+                      child: Image.asset(
+                        'assets/logo.png',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Kids Tracker',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

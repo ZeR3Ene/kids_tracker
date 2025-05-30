@@ -6,6 +6,9 @@ import 'dart:async';
 import 'watch_settings_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
+import '../widgets/widgets.dart'; // Import widgets
+import '../utils/responsive_utils.dart'; // Import ResponsiveUtils
+
 // Import ui for Image
 // Import theme colors
 
@@ -356,61 +359,29 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = ResponsiveUtils(context);
     return Scaffold(
-      backgroundColor:
-          (_isAnyChildUnsafe && _showRedBackground)
-              ? Colors.redAccent
-              : kSoftBackground, // Conditionally set background color with flashing
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        backgroundColor: kPrimaryCyan,
-        elevation: 4.0,
-        centerTitle: true,
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         title: Text(
           'Map',
-          style: GoogleFonts.nunito(
-            fontSize: 30,
+          style: TextStyle(
+            fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
-            shadows: [
-              Shadow(
-                blurRadius: 6.0,
-                color: Colors.black.withOpacity(0.3),
-                offset: const Offset(1.5, 1.5),
-              ),
-            ],
+            color: Theme.of(context).appBarTheme.foregroundColor,
           ),
+          textAlign: TextAlign.center,
         ),
-        actions: [
-          if (_notificationCount > 0)
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  const Icon(Icons.notifications, size: 28),
-                  Positioned(
-                    top: 4,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '$_notificationCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
+        centerTitle: true,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios,
+            size: 24,
+            color: Theme.of(context).appBarTheme.foregroundColor,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: NotificationListener<DraggableScrollableNotification>(
         onNotification: (notification) {
@@ -431,17 +402,23 @@ class _MapScreenState extends State<MapScreen> {
             // Background Cloud Icons (Removed fixed positioning for responsiveness)
             Icon(
               Icons.cloud,
-              color: Colors.white.withOpacity(0.5), // Use opacity directly
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withOpacity(0.5), // Use opacity directly
               // size: 250, // Removed fixed size
             ),
             Icon(
               Icons.cloud,
-              color: Colors.white.withOpacity(0.5), // Use opacity directly
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withOpacity(0.5), // Use opacity directly
               // size: 280, // Removed fixed size
             ),
             Icon(
               Icons.cloud,
-              color: Colors.white.withOpacity(0.5), // Use opacity directly
+              color: Theme.of(
+                context,
+              ).colorScheme.surface.withOpacity(0.5), // Use opacity directly
               // size: 230, // Removed fixed size
             ),
             GoogleMap(
@@ -473,14 +450,18 @@ class _MapScreenState extends State<MapScreen> {
                 return Container(
                   decoration: BoxDecoration(
                     color:
-                        kCardBackground, // Use white for the sheet background
+                        Theme.of(context)
+                            .colorScheme
+                            .surface, // Use white for the sheet background
                     borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(20.0),
                     ), // Rounded top corners
                     boxShadow: [
                       // Subtle general shadow
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.shadow.withOpacity(0.1),
                         blurRadius: 8.0,
                         spreadRadius: 2.0,
                         offset: const Offset(0, -4),
@@ -497,7 +478,9 @@ class _MapScreenState extends State<MapScreen> {
                     border: Border(
                       top: BorderSide(
                         color:
-                            kPrimaryCyan, // Add a top border using kPrimaryCyan
+                            Theme.of(context)
+                                .colorScheme
+                                .primary, // Add a top border using kPrimaryCyan
                         width:
                             _isAnyChildUnsafe
                                 ? 4.0
@@ -529,7 +512,10 @@ class _MapScreenState extends State<MapScreen> {
                                       width: 40.0,
                                       height: 4.0,
                                       decoration: BoxDecoration(
-                                        color: kPrimaryCyan,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface
+                                            .withOpacity(0.3),
                                         borderRadius: BorderRadius.circular(
                                           2.0,
                                         ),
@@ -602,7 +588,7 @@ class _MapScreenState extends State<MapScreen> {
                                             final centerLng =
                                                 safeZoneData['lng'] as double?;
                                             final radius =
-                                                safeZoneData['radius']; // Radius can be int or double
+                                                safeZoneData['radius']; // Radius can be int or double from Firebase
 
                                             if (centerLat != null &&
                                                 centerLng != null &&
@@ -697,7 +683,9 @@ class _MapScreenState extends State<MapScreen> {
                                             _selectedChildId == childId
                                                 ? Border.all(
                                                   color:
-                                                      kPrimaryCyan, // Highlight color
+                                                      Theme.of(context)
+                                                          .colorScheme
+                                                          .primary, // Highlight color
                                                   width: 2.0,
                                                 )
                                                 : null, // No border if not selected
@@ -769,8 +757,11 @@ class _MapScreenState extends State<MapScreen> {
                                                             fontWeight:
                                                                 FontWeight.bold,
                                                             color:
-                                                                Colors
-                                                                    .teal[900],
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .onSurface,
                                                           ), // Removed overflow from style
                                                           overflow:
                                                               TextOverflow
@@ -824,9 +815,14 @@ class _MapScreenState extends State<MapScreen> {
                                                         style: GoogleFonts.nunito(
                                                           fontSize:
                                                               13, // Slightly larger font for last seen
-                                                          color:
-                                                              Colors
-                                                                  .grey[700], // Slightly darker grey
+                                                          color: Theme.of(
+                                                                context,
+                                                              )
+                                                              .colorScheme
+                                                              .onSurface
+                                                              .withOpacity(
+                                                                0.7,
+                                                              ), // Slightly darker grey
                                                         ),
                                                       ),
                                                     ),
@@ -932,7 +928,10 @@ class _MapScreenState extends State<MapScreen> {
                                             IconButton(
                                               icon: Icon(
                                                 Icons.settings,
-                                                color: Colors.grey[600],
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.6),
                                                 size: 24,
                                               ),
                                               onPressed: () {

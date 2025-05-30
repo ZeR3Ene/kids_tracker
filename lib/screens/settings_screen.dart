@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'dart:io';
 import '../main.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import '../utils/responsive_utils.dart';
+import '../widgets/widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -22,6 +26,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     _name = user?.displayName ?? 'Parent';
     _email = user?.email ?? '';
+    _loadNotificationSetting();
+  }
+
+  Future<void> _loadNotificationSetting() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final snapshot =
+          await FirebaseDatabase.instance
+              .ref('users/${user.uid}/settings/notificationsEnabled')
+              .get();
+      if (snapshot.exists) {
+        setState(() {
+          notifications = snapshot.value as bool? ?? true;
+        });
+        print('Settings Log: Loaded notificationsEnabled: $notifications');
+      } else {
+        print(
+          'Settings Log: Notification setting not found in Firebase, using default: $notifications',
+        );
+      }
+    } catch (e) {
+      print('Settings Log: Error loading notification setting: $e');
+    }
+  }
+
+  Future<void> _saveNotificationSetting(bool value) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseDatabase.instance
+          .ref('users/${user.uid}/settings/notificationsEnabled')
+          .set(value);
+      print('Settings Log: Saved notificationsEnabled: $value');
+    } catch (e) {
+      print('Settings Log: Error saving notification setting: $e');
+    }
   }
 
   void _editName() async {
@@ -116,173 +159,339 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final responsive = ResponsiveUtils(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        elevation: 0,
-        title: Text(
-          'Settings',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color:
-                Theme.of(context).appBarTheme.foregroundColor ?? Colors.white,
-          ),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.3),
-                    child: Icon(
-                      Icons.person,
-                      size: 36,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            // Custom App Bar
+            SliverAppBar(
+              backgroundColor: theme.appBarTheme.backgroundColor,
+              pinned: true,
+              floating: false,
+              flexibleSpace: FlexibleSpaceBar(
+                title: Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: theme.appBarTheme.foregroundColor,
                   ),
-                  const SizedBox(width: 20),
-                  Expanded(
+                  textAlign: TextAlign.center,
+                ),
+                centerTitle: true,
+              ),
+              leading: IconButton(
+                icon: Icon(
+                  Icons.arrow_back_ios,
+                  size: 28,
+                  color: theme.appBarTheme.foregroundColor,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+
+            // Profile Section
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: theme.colorScheme.primary.withOpacity(0.2),
+                        blurRadius: 15,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        // Profile Avatar
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.onSurface.withOpacity(0.1),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.4),
+                              width: 3,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.person,
+                            color: Colors.white,
+                            size: 56,
+                          ),
+                        ),
+                        SizedBox(height: 16),
+                        // Name and Email
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
-                              _name ?? '',
-                              style: Theme.of(context).textTheme.titleMedium,
-                            ),
-                            IconButton(
-                              icon: Icon(
-                                Icons.edit,
-                                size: 20,
-                                color: Theme.of(context).iconTheme.color,
+                              _name ?? 'Parent',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
-                              onPressed: _editName,
-                              tooltip: 'Edit Name',
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              _email ?? '',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white.withOpacity(0.7),
+                              ),
                             ),
                           ],
                         ),
-                        Text(
-                          _email ?? '',
-                          style: Theme.of(context).textTheme.titleSmall,
+                        SizedBox(height: 20),
+                        // Edit Profile Button
+                        Container(
+                          width: 140,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.transparent,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                            onPressed: _editName,
+                            child: Text(
+                              'Edit Profile',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 32),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: ListTile(
-              leading: Icon(
-                Icons.lock_reset,
-                color: Theme.of(context).iconTheme.color,
-              ),
-              title: Text(
-                'Reset Password',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              onTap: _resetPassword,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: SwitchListTile(
-              title: Text(
-                'Dark Mode',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              value: ThemeSwitcher.of(context).themeMode == ThemeMode.dark,
-              onChanged: (_) => ThemeSwitcher.of(context).toggleTheme(),
-              secondary: Icon(
-                Icons.dark_mode,
-                color: Theme.of(context).iconTheme.color,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: SwitchListTile(
-              title: Text(
-                'Enable Notifications',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              value: notifications,
-              onChanged: (v) {
-                setState(() => notifications = v);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      v ? 'Notifications enabled' : 'Notifications disabled',
-                    ),
+
+            // Settings List
+            SliverList(
+              delegate: SliverChildListDelegate([
+                SizedBox(height: responsive.spacing(0.04)),
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
                   ),
-                );
-              },
-              secondary: Icon(
-                Icons.notifications_active,
-                color: Theme.of(context).iconTheme.color,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(24),
-              ),
+                  child: Column(
+                    children: [
+                      // Theme Setting
+                      ListTile(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        leading: Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.primary.withOpacity(0.15),
+                          ),
+                          child: Icon(
+                            Icons.dark_mode,
+                            color: theme.colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                        title: Text(
+                          'Dark Mode',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        trailing: Switch(
+                          value:
+                              ThemeSwitcher.of(context).themeMode ==
+                              ThemeMode.dark,
+                          onChanged: (value) {
+                            ThemeSwitcher.of(context).toggleTheme();
+                          },
+                          activeColor: theme.colorScheme.primary,
+                          activeTrackColor: theme.colorScheme.primary
+                              .withOpacity(0.3),
+                          inactiveThumbColor: theme.colorScheme.onSurface
+                              .withOpacity(0.3),
+                          inactiveTrackColor: theme.colorScheme.onSurface
+                              .withOpacity(0.1),
+                        ),
+                      ),
+
+                      // Notifications Setting
+                      ListTile(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        leading: Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.primary.withOpacity(0.15),
+                          ),
+                          child: Icon(
+                            Icons.notifications,
+                            color: theme.colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                        title: Text(
+                          'Notifications',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        trailing: Switch(
+                          value: notifications,
+                          onChanged: (value) async {
+                            setState(() {
+                              notifications = value;
+                            });
+                            await _saveNotificationSetting(value);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    value
+                                        ? 'Notifications enabled'
+                                        : 'Notifications disabled',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          activeColor: theme.colorScheme.primary,
+                          activeTrackColor: theme.colorScheme.primary
+                              .withOpacity(0.3),
+                          inactiveThumbColor: theme.colorScheme.onSurface
+                              .withOpacity(0.3),
+                          inactiveTrackColor: theme.colorScheme.onSurface
+                              .withOpacity(0.1),
+                        ),
+                      ),
+
+                      // Security Setting
+                      ListTile(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        leading: Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.primary.withOpacity(0.15),
+                          ),
+                          child: Icon(
+                            Icons.lock_reset,
+                            color: theme.colorScheme.primary,
+                            size: 24,
+                          ),
+                        ),
+                        title: Text(
+                          'Reset Password',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 24,
+                          color: theme.colorScheme.onSurface.withOpacity(0.4),
+                        ),
+                        onTap: _resetPassword,
+                      ),
+
+                      // Account Setting
+                      ListTile(
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                        leading: Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: theme.colorScheme.error.withOpacity(0.15),
+                          ),
+                          child: Icon(
+                            Icons.logout,
+                            color: theme.colorScheme.error,
+                            size: 24,
+                          ),
+                        ),
+                        title: Text(
+                          'Logout',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: theme.colorScheme.error,
+                          ),
+                        ),
+                        trailing: Icon(
+                          Icons.arrow_forward_ios,
+                          size: 24,
+                          color: theme.colorScheme.error.withOpacity(0.4),
+                        ),
+                        onTap: _logout,
+                      ),
+                    ],
+                  ),
+                ),
+              ]),
             ),
-          ),
-          const SizedBox(height: 32),
-          Center(
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6F61),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(32),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  vertical: 18,
-                  horizontal: 32,
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.logout, color: Colors.white),
-              label: const Text(
-                'Logout',
-                style: TextStyle(color: Colors.white),
-              ),
-              onPressed: _logout,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

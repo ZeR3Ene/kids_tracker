@@ -298,10 +298,23 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
       appBar: AppBar(
         elevation: 4,
         backgroundColor: theme.colorScheme.primary,
-        centerTitle: true,
-        title: const Text(
+        title: Text(
           'Watch Settings',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: theme.appBarTheme.foregroundColor,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back_ios,
+            size: 24,
+            color: theme.appBarTheme.foregroundColor,
+          ),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: AnimatedSwitcher(
