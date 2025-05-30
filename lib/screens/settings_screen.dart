@@ -170,9 +170,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           slivers: [
             // Custom App Bar
             SliverAppBar(
-              backgroundColor: theme.appBarTheme.backgroundColor,
+              backgroundColor:
+                  isDarkMode
+                      ? const Color(0xFF121212)
+                      : theme.appBarTheme.backgroundColor,
               pinned: true,
               floating: false,
+              elevation: isDarkMode ? 0 : null,
               flexibleSpace: FlexibleSpaceBar(
                 title: Text(
                   'Settings',
@@ -201,15 +205,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: EdgeInsets.all(20),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
+                    color:
+                        isDarkMode
+                            ? const Color(0xFF121212)
+                            : theme.colorScheme.primary,
                     borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: theme.colorScheme.primary.withOpacity(0.2),
-                        blurRadius: 15,
-                        offset: Offset(0, 6),
-                      ),
-                    ],
+                    boxShadow:
+                        isDarkMode
+                            ? []
+                            : [
+                              BoxShadow(
+                                color: theme.colorScheme.primary.withOpacity(
+                                  0.2,
+                                ),
+                                blurRadius: 15,
+                                offset: Offset(0, 6),
+                              ),
+                            ],
                   ),
                   child: Padding(
                     padding: EdgeInsets.all(24),
@@ -223,13 +235,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             shape: BoxShape.circle,
                             color: theme.colorScheme.onSurface.withOpacity(0.1),
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.4),
+                              color:
+                                  isDarkMode
+                                      ? theme.colorScheme.onSurface.withOpacity(
+                                        0.4,
+                                      )
+                                      : Colors.white.withOpacity(0.4),
                               width: 3,
                             ),
                           ),
                           child: Icon(
                             Icons.person,
-                            color: Colors.white,
+                            color:
+                                isDarkMode
+                                    ? theme.colorScheme.onSurface
+                                    : Colors.white,
                             size: 56,
                           ),
                         ),
@@ -243,7 +263,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color:
+                                    isDarkMode
+                                        ? theme.colorScheme.onSurface
+                                        : Colors.white,
                               ),
                             ),
                             SizedBox(height: 8),
@@ -251,7 +274,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               _email ?? '',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.white.withOpacity(0.7),
+                                color:
+                                    isDarkMode
+                                        ? theme.colorScheme.onSurface
+                                            .withOpacity(0.7)
+                                        : Colors.white.withOpacity(0.7),
                               ),
                             ),
                           ],
@@ -262,11 +289,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           width: 140,
                           height: 40,
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: theme.colorScheme.surface,
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color:
+                                    isDarkMode
+                                        ? theme.colorScheme.onSurface
+                                            .withOpacity(0.15)
+                                        : Colors.black.withOpacity(0.08),
                                 blurRadius: 8,
                                 offset: Offset(0, 3),
                               ),
