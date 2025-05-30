@@ -11,9 +11,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-const Color kCardBackground = Color(0xFFFFFFFF);
-const Color kTextDark = Color(0xFF333333);
-
 class Activity {
   final String id;
   final IconData icon;
@@ -42,10 +39,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const Color kPrimaryCyan = Color(0xFF2EC4B6);
-  static const Color kAccentCoral = Color(0xFFFF6F61);
-  static const Color kSoftBackground = Color(0xFFF0FDFC);
-
   final user = FirebaseAuth.instance.currentUser;
   DatabaseReference get userRef =>
       FirebaseDatabase.instance.ref('users/${user?.uid}/children');
@@ -80,6 +73,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final Map<String, Timer?> _sosTimers =
       {}; // Map to store timers for repeating SOS notifications
   final ScrollController _sheetController = ScrollController();
+  bool _notificationsEnabled = true; // State variable for notification setting
+  StreamSubscription?
+  _notificationSettingsSubscription; // Subscription for notification setting changes
 
   void _incrementNotificationCount() {
     setState(() {
@@ -103,7 +99,10 @@ class _HomeScreenState extends State<HomeScreen> {
       final activity = Activity(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         icon: isAlert ? Icons.warning : Icons.info,
-        color: isAlert ? Colors.red : kPrimaryCyan,
+        color:
+            isAlert
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
         title: title,
         subtitle: message,
         time: _formatTime(DateTime.now()),
@@ -116,7 +115,12 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       // Also show a native phone notification
-      _showAppNotification(title, message, isAlert: isAlert);
+      print(
+        'HomeScreen Log: Checking _notificationsEnabled before _showAppNotification (from _showNotification): $_notificationsEnabled',
+      );
+      if (_notificationsEnabled) {
+        _showAppNotification(title, message, isAlert: isAlert);
+      }
     }
   }
 
@@ -126,11 +130,17 @@ class _HomeScreenState extends State<HomeScreen> {
         'HomeScreen Log: _showZoneAlert called for $childName (ID: $childId)',
       );
       // Show native notification for zone alert
-      _showAppNotification(
-        'Zone Alert',
-        '$childName is outside safe zone',
-        isAlert: true,
+      print(
+        'HomeScreen Log: Checking _notificationsEnabled before _showAppNotification (from _showZoneAlert): $_notificationsEnabled',
       );
+      if (_notificationsEnabled) {
+        // Conditionally show notification
+        _showAppNotification(
+          'Zone Alert',
+          '$childName is outside safe zone',
+          isAlert: true,
+        );
+      }
     }
   }
 
@@ -143,10 +153,16 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _initializeNotifications();
     _subscribeToAuthStateChanges();
+    _loadNotificationSetting(); // Load notification setting on init
+    _subscribeToNotificationSettingChanges(); // Subscribe to changes
 
     if (user != null) {
       _loadWatches();
     }
+
+    print(
+      'HomeScreen Log: Loaded notificationsEnabled: $_notificationsEnabled',
+    );
   }
 
   @override
@@ -154,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
     print('HomeScreen Log: dispose called.');
     _cancelSosTimers(); // Cancel all SOS timers on dispose
     _cancelDatabaseListeners();
+    _unsubscribeFromNotificationSettings(); // Unsubscribe from notification settings
     _sosAlertTimer?.cancel();
     super.dispose();
   }
@@ -214,7 +231,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         print(
                           'HomeScreen Log: SOS timer triggered for $childId',
                         );
-                        _showNativeSOSNotification(childId, childName);
+                        print(
+                          'HomeScreen Log: Checking _notificationsEnabled before _showNativeSOSNotification: $_notificationsEnabled',
+                        );
+                        if (_notificationsEnabled) {
+                          // Conditionally show notification
+                          _showNativeSOSNotification(childId, childName);
+                        }
                       },
                     );
                   } else if (!currentSos && previousSos) {
@@ -486,7 +509,6 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         });
         _showNotification(title, message, isAlert: true);
-        _showAppNotification(title, message, isAlert: true);
         print('HomeScreen Log: Zone alert notification shown for $childId.');
       }
     } else {
@@ -612,19 +634,23 @@ class _HomeScreenState extends State<HomeScreen> {
             title: Text(
               'SOS Alert!',
               style: TextStyle(
-                color: Colors.white,
+                color: Theme.of(context).colorScheme.onError,
                 fontWeight: FontWeight.bold,
-              ), // White text for contrast
+              ),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.warning, color: Colors.white, size: 60),
+                Icon(
+                  Icons.warning,
+                  color: Theme.of(context).colorScheme.onError,
+                  size: 60,
+                ),
                 SizedBox(height: 16),
                 Text(
                   '$childName has triggered an SOS and may be unsafe.',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onError,
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                   ),
@@ -673,7 +699,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   _isSOSAlertShowing =
                       false; // Ensure flag is reset after attempt to clear Firebase
                 },
-                child: Text('OK', style: TextStyle(color: Colors.white)),
+                child: Text(
+                  'OK',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onError,
+                  ),
+                ),
               ),
             ],
           ),
@@ -681,51 +712,71 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showNativeSOSNotification(String childId, String childName) async {
+    if (!_notificationsEnabled) {
+      print(
+        'HomeScreen Log: Notifications disabled - skipping SOS notification',
+      );
+      return;
+    }
+
+    print(
+      'HomeScreen Log: Inside _showNativeSOSNotification. _notificationsEnabled: $_notificationsEnabled',
+    ); // Log inside the function
+
     final notificationId = childId.hashCode;
     _sosNotificationIds[childId] = notificationId; // Store notification ID
 
-    final vibrationPattern = Int64List.fromList(<int>[0, 1000, 500, 1000]);
-    final AndroidNotificationDetails
-    androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      'sos_channel_id',
-      'SOS Alerts',
-      channelDescription: 'Notifications for SOS signals',
-      importance: Importance.max,
-      priority: Priority.high,
-      sound: null, // Use default system alert sound
-      playSound: true,
-      ongoing: true, // Make it persistent
-      autoCancel: false, // Don't auto cancel when clicked
-      vibrationPattern: vibrationPattern,
-      enableVibration: true,
-      color: const Color(0xFFFF0000), // Red color for SOS
-      colorized:
-          true, // Attempt to colorize the notification background (may vary by device)
+    final notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'sos_channel',
+        'SOS Alerts',
+        channelDescription: 'Emergency SOS notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        color: Theme.of(context).colorScheme.error,
+        playSound: true,
+        enableVibration: true,
+        showWhen: true,
+        ticker: 'Emergency SOS Alert',
+        ongoing: true,
+        autoCancel: false,
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
     );
 
-    final NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-      iOS: const DarwinNotificationDetails(),
+    await flutterLocalNotificationsPlugin.show(
+      notificationId,
+      'SOS Alert',
+      '$childName has pressed the SOS button',
+      notificationDetails,
     );
 
-    await flutterLocalNotificationsPlugin
-        .show(
-          0,
-          'SOS Alert',
-          '$childName sent an SOS signal!',
-          platformChannelSpecifics,
-          payload: childId, // Include childId as payload
-        )
-        .then((_) {
-          print(
-            'Native SOS notification shown for $childName (ID: $childId), ID: $notificationId.',
+    // Start repeating notification if it's not already showing
+    if (!_isSOSAlertShowing) {
+      _isSOSAlertShowing = true;
+      _sosAlertTimer?.cancel();
+      _sosAlertTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+        if (!_notificationsEnabled) {
+          timer.cancel();
+          return;
+        }
+
+        if (_sosNotificationIds.containsKey(childId)) {
+          flutterLocalNotificationsPlugin.show(
+            notificationId,
+            'SOS Alert',
+            '$childName has pressed the SOS button',
+            notificationDetails,
           );
-        })
-        .catchError((error) {
-          print(
-            'Error showing native SOS notification for $childName (ID: $childId): $error',
-          );
-        });
+        } else {
+          timer.cancel();
+        }
+      });
+    }
   }
 
   void _dismissNativeSOSNotification(String childId) async {
@@ -744,7 +795,10 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder:
             (context) => AlertDialog(
-              backgroundColor: kSoftBackground,
+              backgroundColor:
+                  Theme.of(context)
+                      .colorScheme
+                      .surfaceVariant, // Use theme surface variant for dialog background
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -752,7 +806,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 'Notifications',
                 style: GoogleFonts.nunito(
                   fontWeight: FontWeight.bold,
-                  color: kTextDark,
+                  color:
+                      Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant, // Text color for dialog title
                 ),
               ),
               content: SingleChildScrollView(
@@ -767,11 +824,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: kCardBackground,
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).cardColor, // Use theme card color
                                   borderRadius: BorderRadius.circular(12),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.03),
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(
+                                        0.05,
+                                      ), // Shadow color from theme
                                       blurRadius: 6,
                                       offset: const Offset(0, 2),
                                     ),
@@ -782,8 +846,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     activity.icon,
                                     color:
                                         activity.isAlert
-                                            ? kAccentCoral
-                                            : kPrimaryCyan,
+                                            ? Theme.of(
+                                              context,
+                                            ).colorScheme.error
+                                            : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
                                     size: 24,
                                   ),
                                   title: Text(
@@ -792,20 +860,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fontWeight: FontWeight.bold,
                                       color:
                                           activity.isAlert
-                                              ? kAccentCoral
-                                              : kTextDark,
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.error
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
                                     ),
                                   ),
                                   subtitle: Text(
                                     activity.subtitle,
                                     style: GoogleFonts.nunito(
-                                      color: Colors.grey[700],
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(0.7),
                                     ),
                                   ),
                                   trailing: Text(
                                     activity.time,
                                     style: GoogleFonts.nunito(
-                                      color: Colors.grey[600],
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(0.6),
                                     ),
                                   ),
                                 ),
@@ -829,7 +905,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     'Clear All',
                     style: GoogleFonts.nunito(
-                      color: kAccentCoral,
+                      color:
+                          Theme.of(
+                            context,
+                          ).colorScheme.error, // Use theme error color
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -846,7 +925,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     'Close',
                     style: GoogleFonts.nunito(
-                      color: kPrimaryCyan,
+                      color:
+                          Theme.of(
+                            context,
+                          ).colorScheme.primary, // Use theme primary color
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -857,53 +939,63 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _showAppNotification(
+  void _showAppNotification(
     String title,
     String message, {
     bool isAlert = false,
-  }) async {
-    final AndroidNotificationDetails androidNotificationDetails =
-        AndroidNotificationDetails(
-          'app_channel_id',
-          'General Notifications',
-          channelDescription: 'General app notifications',
-          importance: isAlert ? Importance.high : Importance.low,
-          priority: isAlert ? Priority.high : Priority.low,
-          sound: null,
-          playSound: true,
-          vibrationPattern: Int64List.fromList(<int>[0, 1000, 500, 1000]),
-          enableVibration: true,
-          color: isAlert ? const Color(0xFFFF0000) : null,
-        );
+  }) {
+    if (!_notificationsEnabled) {
+      print(
+        'HomeScreen Log: Notifications disabled - skipping native notification',
+      );
+      return;
+    }
 
-    const DarwinNotificationDetails darwinNotificationDetails =
-        DarwinNotificationDetails();
-
-    final NotificationDetails notificationDetails = NotificationDetails(
-      android: androidNotificationDetails,
-      iOS: darwinNotificationDetails,
+    print(
+      'HomeScreen Log: Showing native notification: $title - $message (Alert: $isAlert)',
     );
 
-    final int notificationId =
-        DateTime.now().millisecondsSinceEpoch %
-        2000000000; // Unique ID for general notifications
+    final notificationDetails = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'kids_tracker_channel',
+        'Kids Tracker',
+        channelDescription: 'Kids Tracker notifications',
+        importance: Importance.max,
+        priority: Priority.high,
+        color:
+            isAlert
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
+        playSound: true,
+        enableVibration: true,
+        showWhen: true,
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
 
-    await flutterLocalNotificationsPlugin.show(
-      notificationId,
+    flutterLocalNotificationsPlugin.show(
+      0,
       title,
       message,
       notificationDetails,
     );
-    print('App notification shown: $title');
   }
 
   @override
   Widget build(BuildContext context) {
     print('HomeScreen Log: build called.');
     return Scaffold(
-      backgroundColor: kSoftBackground,
+      backgroundColor:
+          Theme.of(
+            context,
+          ).colorScheme.background, // Use theme background color
       appBar: AppBar(
-        backgroundColor: kPrimaryCyan,
+        backgroundColor:
+            Theme.of(context).colorScheme.primary, // Use theme primary color
         automaticallyImplyLeading: false,
         elevation: 0,
         leading: IconButton(
@@ -974,7 +1066,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: kPrimaryCyan,
+                  color:
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary, // Use theme primary color
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(40),
                     bottomRight: Radius.circular(40),
@@ -1018,7 +1113,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               style: GoogleFonts.poppins(
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color:
+                                    Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary, // Text color on primary background
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -1026,7 +1124,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               'Keep your kids safe',
                               style: GoogleFonts.poppins(
                                 fontSize: 10,
-                                color: Colors.white.withOpacity(0.9),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimary.withOpacity(0.9),
                               ),
                             ),
                           ],
@@ -1041,12 +1141,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Quick Actions',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: kTextDark,
+                        color: Theme.of(context).colorScheme.onBackground,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1076,8 +1176,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       context,
                                       watchId: watchId,
                                     ),
-                                primaryColor: kPrimaryCyan,
-                                accentColor: kAccentCoral,
                                 timeFormatter: _formatTime,
                               ),
                             );
@@ -1088,7 +1186,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               (index) => Padding(
                                 padding: const EdgeInsets.only(right: 16.0),
                                 child: WatchCard(
-                                  key: ValueKey('not_connected_${index + 1}'),
+                                  key: ValueKey(
+                                    'not_connected_${watches.length + index + 1}',
+                                  ),
                                   watchId:
                                       'new_watch_${watches.length + index + 1}',
                                   data: {},
@@ -1096,8 +1196,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       () =>
                                           Navigator.pushNamed(context, '/pair'),
                                   onSettings: () {},
-                                  primaryColor: kPrimaryCyan,
-                                  accentColor: kAccentCoral,
                                   timeFormatter: _formatTime,
                                 ),
                               ),
@@ -1106,20 +1204,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Text(
+                    Text(
                       'Features',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: kTextDark,
+                        color: Theme.of(context).colorScheme.onBackground,
                       ),
                     ),
                     const SizedBox(height: 16),
                     CardTile(
                       icon: Icons.map,
-                      color: kPrimaryCyan,
+                      color: Theme.of(context).colorScheme.primary,
                       title: 'View Map',
-                      subtitle: 'See your kids on the map',
+                      subtitle: 'View all children locations',
                       onTap: () => Navigator.pushNamed(context, '/map'),
                     ),
                     const SizedBox(height: 24),
@@ -1129,8 +1227,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: const Icon(Icons.add),
                         label: const Text("Add Example Watches"),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: kPrimaryCyan,
-                          foregroundColor: Colors.white,
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primary,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -1207,7 +1307,7 @@ class _HomeScreenState extends State<HomeScreen> {
       await FirebaseDatabase.instance.ref(updatePath).update(updateValue);
       print('Firebase update for $childId safe status successful');
 
-      print('Simulated $childId status toggled to: $newSafeStatus');
+      print('Simulated $childId safe status set to: $newSafeStatus');
     } catch (e) {
       print('Error simulating $childId safe zone status: $e');
     }
@@ -1440,6 +1540,67 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _sosTimers.clear();
   }
+
+  Future<void> _loadNotificationSetting() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return; // User not logged in
+
+    try {
+      final snapshot =
+          await FirebaseDatabase.instance
+              .ref('users/${user.uid}/settings/notificationsEnabled')
+              .get();
+      if (snapshot.exists) {
+        setState(() {
+          _notificationsEnabled =
+              snapshot.value as bool? ??
+              true; // Default to true if value is null
+        });
+        print(
+          'HomeScreen Log: Loaded notificationsEnabled: $_notificationsEnabled',
+        );
+      } else {
+        print(
+          'HomeScreen Log: Notification setting not found in Firebase, using default: $_notificationsEnabled',
+        );
+      }
+    } catch (e) {
+      print('HomeScreen Log: Error loading notification setting: $e');
+      // Optionally show an error to the user
+    }
+  }
+
+  void _subscribeToNotificationSettingChanges() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return; // User not logged in
+
+    _notificationSettingsSubscription = FirebaseDatabase.instance
+        .ref('users/${user.uid}/settings/notificationsEnabled')
+        .onValue
+        .listen(
+          (event) {
+            if (mounted) {
+              final value = event.snapshot.value as bool?;
+              setState(() {
+                _notificationsEnabled = value ?? true;
+              });
+              print(
+                'HomeScreen Log: Real-time update - notificationsEnabled: $_notificationsEnabled',
+              );
+            }
+          },
+          onError: (error) {
+            print(
+              'HomeScreen Log: Error subscribing to notification setting changes: $error',
+            );
+          },
+        );
+  }
+
+  void _unsubscribeFromNotificationSettings() {
+    _notificationSettingsSubscription?.cancel();
+    _notificationSettingsSubscription = null;
+  }
 }
 
 double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
@@ -1461,13 +1622,77 @@ double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
   return R * c;
 }
 
+class CardTile extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color? backgroundColor;
+  final Color? shadowColor;
+  final Color? trailingIconColor;
+
+  const CardTile({
+    super.key,
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.backgroundColor,
+    this.shadowColor,
+    this.trailingIconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor ?? Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(32),
+        boxShadow: [
+          BoxShadow(
+            color:
+                shadowColor ??
+                Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: color, size: 30),
+        title: Text(
+          title,
+          style: GoogleFonts.nunito(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: GoogleFonts.nunito(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+          ),
+        ),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          color:
+              trailingIconColor ??
+              Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
 class WatchCard extends StatelessWidget {
   final String watchId;
   final Map? data;
   final VoidCallback onConnect;
   final VoidCallback onSettings;
-  final Color primaryColor;
-  final Color accentColor;
   final String Function(DateTime) timeFormatter;
 
   const WatchCard({
@@ -1476,8 +1701,6 @@ class WatchCard extends StatelessWidget {
     required this.data,
     required this.onConnect,
     required this.onSettings,
-    required this.primaryColor,
-    required this.accentColor,
     required this.timeFormatter,
   });
 
@@ -1492,12 +1715,33 @@ class WatchCard extends StatelessWidget {
     print('Building WatchCard for watchId: $watchId');
     print('WatchCard received data: $data');
     final isConnected = data != null && data!['location'] != null;
-    final colorHex =
-        (isConnected && data!['color'] != null)
-            ? data!['color'] as String
-            : '#2EC4B6';
-    print('Determined colorHex: $colorHex');
-    final color = Color(_hexToColor(colorHex));
+    Color watchColor =
+        isConnected && data!['color'] != null
+            ? Color(_hexToColor(data!['color'] as String))
+            : Theme.of(
+              context,
+            ).colorScheme.primary; // Fallback to theme primary
+
+    Color avatarBackgroundColor =
+        isConnected && data!['color'] != null
+            ? watchColor.withOpacity(
+              0.2,
+            ) // Use watch color with opacity if connected
+            : Theme.of(context).colorScheme.primary.withOpacity(
+              0.2,
+            ); // Use theme primary with opacity if not connected
+
+    Color watchIconColor =
+        isConnected && data!['color'] != null
+            ? watchColor // Use watch color if connected
+            : Theme.of(
+              context,
+            ).colorScheme.primary; // Use theme primary if not connected
+
+    print(
+      'Determined watchColor: $watchColor, avatarBackgroundColor: $avatarBackgroundColor, watchIconColor: $watchIconColor',
+    );
+
     final avatar =
         isConnected && data?['avatar'] != null
             ? CircleAvatar(
@@ -1505,19 +1749,21 @@ class WatchCard extends StatelessWidget {
               radius: 28,
             )
             : CircleAvatar(
-              backgroundColor: color.withOpacity(0.2),
+              backgroundColor: avatarBackgroundColor,
               radius: 28,
-              child: Icon(Icons.watch, color: color, size: 32),
+              child: Icon(Icons.watch, color: watchIconColor, size: 32),
             );
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kCardBackground,
+        color: Theme.of(context).cardColor, // Use theme card color
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(
+              0.1,
+            ), // Adjusted shadow color opacity
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1531,7 +1777,10 @@ class WatchCard extends StatelessWidget {
             isConnected ? (data?['name'] ?? 'Watch') : 'Not Connected',
             style: GoogleFonts.nunito(
               fontWeight: FontWeight.w600,
-              color: kTextDark,
+              color:
+                  Theme.of(
+                    context,
+                  ).colorScheme.onSurface, // Text color on card surface
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -1541,13 +1790,21 @@ class WatchCard extends StatelessWidget {
               data?['lastSeen'] != null
                   ? 'Last seen: ${timeFormatter(DateTime.fromMillisecondsSinceEpoch(data?['lastSeen']))}'
                   : 'No recent location',
-              style: GoogleFonts.nunito(fontSize: 12, color: Colors.grey[700]),
+              style: GoogleFonts.nunito(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ), // Text color on card surface with opacity
             ),
             Text(
               data?['safe'] == true ? 'Status: Safe' : 'Status: Outside zone',
               style: GoogleFonts.nunito(
                 fontSize: 12,
-                color: data?['safe'] == true ? primaryColor : accentColor,
+                color:
+                    data?['safe'] == true
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context)
+                            .colorScheme
+                            .secondary, // Use theme primary or secondary color for status
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1555,8 +1812,12 @@ class WatchCard extends StatelessWidget {
             ElevatedButton(
               onPressed: onSettings,
               style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
+                backgroundColor: watchColor, // Use the determined watch color
+                foregroundColor:
+                    watchColor.computeLuminance() > 0.5
+                        ? Colors.black
+                        : Colors
+                            .white, // Determine text color based on button color luminance
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -1573,8 +1834,14 @@ class WatchCard extends StatelessWidget {
             ElevatedButton(
               onPressed: onConnect,
               style: ElevatedButton.styleFrom(
-                backgroundColor: accentColor,
-                foregroundColor: Colors.white,
+                backgroundColor:
+                    Theme.of(context)
+                        .colorScheme
+                        .primary, // Use theme primary for connect button
+                foregroundColor:
+                    Theme.of(
+                      context,
+                    ).colorScheme.onPrimary, // Text color on primary button
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -1588,51 +1855,6 @@ class WatchCard extends StatelessWidget {
               child: const Text('Connect'),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class CardTile extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const CardTile({
-    super.key,
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: kCardBackground,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: color, size: 30),
-        title: Text(
-          title,
-          style: GoogleFonts.nunito(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(subtitle, style: GoogleFonts.nunito()),
-        trailing: Icon(Icons.arrow_forward_ios, color: Colors.grey[400]),
-        onTap: onTap,
       ),
     );
   }
