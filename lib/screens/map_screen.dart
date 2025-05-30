@@ -5,7 +5,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'dart:async';
 import 'watch_settings_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:ui'; // Import for PictureRecorder, Canvas, ImageByteFormat
+import 'dart:ui';
 // Import ui for Image
 // Import theme colors
 
@@ -164,6 +164,21 @@ class _MapScreenState extends State<MapScreen> {
                     icon: BitmapDescriptor.defaultMarkerWithHue(
                       markerHue,
                     ), // Use hue derived from child's color
+                    onTap: () {
+                      // Add onTap callback
+                      print('MapScreen: Marker for $childId tapped.');
+                      setState(() {
+                        _selectedChildId = childId;
+                      });
+                      // Minimize the draggable sheet when marker is tapped
+                      _sheetController.animateTo(
+                        0.15, // Animate to the new minimum size
+                        duration: const Duration(
+                          milliseconds: 300,
+                        ), // Animation duration
+                        curve: Curves.easeOut, // Animation curve
+                      );
+                    },
                   );
                   newMarkers.add(marker); // Add to the new set
                   print('MapScreen: Added marker for $childId.');
@@ -498,29 +513,35 @@ class _MapScreenState extends State<MapScreen> {
                         // Keep Column to layout the handle and the list vertically
                         children: [
                           // Drag handle area (removed cloud icons from here)
-                          Container(
-                            height: 30.0,
-                            alignment: Alignment.center,
-                            child: Container(
-                              // Drag handle line
-                              width: 40.0,
-                              height: 4.0,
-                              decoration: BoxDecoration(
-                                // Use theme color for handle
-                                color:
-                                    kPrimaryCyan, // Use Primary Cyan for handle
-                                borderRadius: BorderRadius.circular(2.0),
-                              ),
-                            ),
-                          ),
                           Expanded(
                             // Wrap ListView with Expanded
                             child: ListView.builder(
                               controller: scrollController,
-                              itemCount: _childrenData.length,
+                              // ADDED: Add 1 to itemCount to account for the handle
+                              itemCount: _childrenData.length + 1,
                               itemBuilder: (context, index) {
+                                // ADDED: Add the drag handle as the first item in the ListView
+                                if (index == 0) {
+                                  return Container(
+                                    height: 30.0,
+                                    alignment: Alignment.center,
+                                    child: Container(
+                                      width: 40.0,
+                                      height: 4.0,
+                                      decoration: BoxDecoration(
+                                        color: kPrimaryCyan,
+                                        borderRadius: BorderRadius.circular(
+                                          2.0,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                // Adjust index for the rest of the items since index 0 is now the handle
+                                final actualIndex = index - 1;
                                 final childId = _childrenData.keys.elementAt(
-                                  index,
+                                  actualIndex,
                                 );
                                 final childData =
                                     _childrenData[childId]
@@ -555,6 +576,8 @@ class _MapScreenState extends State<MapScreen> {
                                       print(
                                         'MapScreen: Card for $name tapped.',
                                       ); // Debug print
+
+                                      // --- Add map centering logic back here ---
                                       final locationData =
                                           childData['location']
                                               as Map<dynamic, dynamic>?;
@@ -566,10 +589,10 @@ class _MapScreenState extends State<MapScreen> {
                                         if (lat != null && lng != null) {
                                           final position = LatLng(lat, lng);
                                           print(
-                                            'MapScreen: Attempting to center map on $position.',
+                                            'MapScreen: Attempting to center map on $position from card tap.',
                                           ); // Debug print
 
-                                          // Also get safe zone data to zoom to circle
+                                          // Also get safe zone data to zoom to circle if available
                                           final safeZoneData =
                                               childData['safeZone']
                                                   as Map<dynamic, dynamic>?;
@@ -593,9 +616,8 @@ class _MapScreenState extends State<MapScreen> {
                                                       ? radius.toDouble()
                                                       : 0.0;
 
-                                              // Instead of centering on the child, center on the safe zone and adjust zoom
                                               print(
-                                                'MapScreen: Attempting to zoom to safe zone for $name.',
+                                                'MapScreen: Attempting to zoom to safe zone for $name from card tap.',
                                               ); // Debug print
                                               _mapController?.animateCamera(
                                                 CameraUpdate.newLatLngZoom(
@@ -608,7 +630,7 @@ class _MapScreenState extends State<MapScreen> {
                                             } else {
                                               // If safe zone data is incomplete, just center on the child's location
                                               print(
-                                                'MapScreen: Incomplete safe zone data for $name, centering on child.',
+                                                'MapScreen: Incomplete safe zone data for $name, centering on child from card tap.',
                                               ); // Debug print
                                               _centerMap(
                                                 position,
@@ -617,7 +639,7 @@ class _MapScreenState extends State<MapScreen> {
                                           } else {
                                             // If no safe zone data, just center on the child's location
                                             print(
-                                              'MapScreen: No safe zone data for $name, centering on child.',
+                                              'MapScreen: No safe zone data for $name, centering on child from card tap.',
                                             ); // Debug print
                                             _centerMap(
                                               position,
@@ -625,13 +647,15 @@ class _MapScreenState extends State<MapScreen> {
                                           }
                                         }
                                       }
+                                      // --- End map centering logic ---
+
                                       // Update selected child ID
                                       setState(() {
                                         _selectedChildId = childId;
                                       });
                                       // Minimize the draggable sheet
                                       print(
-                                        'MapScreen: Attempting to minimize sheet.',
+                                        'MapScreen: Attempting to minimize sheet from card tap.',
                                       ); // Debug print
                                       _sheetController.animateTo(
                                         0.15, // Animate to the new minimum size
@@ -808,6 +832,102 @@ class _MapScreenState extends State<MapScreen> {
                                                     ),
                                                 ],
                                               ),
+                                            ),
+                                            // ADDED: Button to center map on child location
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.location_on,
+                                                color:
+                                                    childColor, // Use the child's assigned color
+                                                size: 28,
+                                              ),
+                                              onPressed: () {
+                                                print(
+                                                  'MapScreen: Location button tapped for $name.',
+                                                ); // Debug print
+                                                final locationData =
+                                                    childData['location']
+                                                        as Map<
+                                                          dynamic,
+                                                          dynamic
+                                                        >?;
+                                                if (locationData != null) {
+                                                  final lat =
+                                                      locationData['lat']
+                                                          as double?;
+                                                  final lng =
+                                                      locationData['lng']
+                                                          as double?;
+                                                  if (lat != null &&
+                                                      lng != null) {
+                                                    final position = LatLng(
+                                                      lat,
+                                                      lng,
+                                                    );
+                                                    // Also get safe zone data to zoom to circle
+                                                    final safeZoneData =
+                                                        childData['safeZone']
+                                                            as Map<
+                                                              dynamic,
+                                                              dynamic
+                                                            >?;
+                                                    if (safeZoneData != null) {
+                                                      final centerLat =
+                                                          safeZoneData['lat']
+                                                              as double?;
+                                                      final centerLng =
+                                                          safeZoneData['lng']
+                                                              as double?;
+                                                      final radius =
+                                                          safeZoneData['radius']; // Radius can be int or double
+
+                                                      if (centerLat != null &&
+                                                          centerLng != null &&
+                                                          radius != null) {
+                                                        final center = LatLng(
+                                                          centerLat,
+                                                          centerLng,
+                                                        );
+                                                        final double
+                                                        radiusDouble =
+                                                            (radius is num)
+                                                                ? radius
+                                                                    .toDouble()
+                                                                : 0.0;
+
+                                                        // Instead of centering on the child, center on the safe zone and adjust zoom
+                                                        print(
+                                                          'MapScreen: Attempting to zoom to safe zone for $name via button.',
+                                                        ); // Debug print
+                                                        _mapController?.animateCamera(
+                                                          CameraUpdate.newLatLngZoom(
+                                                            center,
+                                                            _getZoomLevelForRadius(
+                                                              radiusDouble,
+                                                            ),
+                                                          ),
+                                                        ); // Center on safe zone and adjust zoom
+                                                      } else {
+                                                        // If safe zone data is incomplete, just center on the child's location
+                                                        print(
+                                                          'MapScreen: Incomplete safe zone data for $name, centering on child via button.',
+                                                        ); // Debug print
+                                                        _centerMap(
+                                                          position,
+                                                        ); // Center map on child's location
+                                                      }
+                                                    } else {
+                                                      // If no safe zone data, just center on the child's location
+                                                      print(
+                                                        'MapScreen: No safe zone data for $name, centering on child via button.',
+                                                      ); // Debug print
+                                                      _centerMap(
+                                                        position,
+                                                      ); // Center map on child's location
+                                                    }
+                                                  }
+                                                }
+                                              },
                                             ),
                                             IconButton(
                                               icon: Icon(

@@ -79,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
       {}; // Map to store notification IDs by childId
   final Map<String, Timer?> _sosTimers =
       {}; // Map to store timers for repeating SOS notifications
+  final ScrollController _sheetController = ScrollController();
 
   void _incrementNotificationCount() {
     setState(() {
@@ -115,7 +116,8 @@ class _HomeScreenState extends State<HomeScreen> {
       });
 
       // Also show a native phone notification
-      //_showAppNotification(title, message, isAlert: isAlert);
+      print('HomeScreen Log: Calling _showAppNotification for: $title');
+      _showAppNotification(title, message, isAlert: isAlert);
     }
   }
 
@@ -199,6 +201,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (currentSos && !previousSos) {
                     final childName = watchData['name'] as String? ?? 'Child';
                     _showSOSAlertDialog(childName, childId, context);
+                    // Add in-app notification for SOS trigger
+                    _showNotification(
+                      'SOS Alert',
+                      '$childName sent an SOS signal!',
+                      isAlert: true,
+                    );
                     // Start repeating native SOS notification
                     _sosTimers[childId]?.cancel(); // Cancel any existing timer
                     _sosTimers[childId] = Timer.periodic(
@@ -464,7 +472,7 @@ class _HomeScreenState extends State<HomeScreen> {
         print(
           'HomeScreen Log: Starting zone alert timer for $name (ID: $childId)',
         );
-        _zoneAlertTimers[childId] = Timer.periodic(const Duration(minutes: 5), (
+        _zoneAlertTimers[childId] = Timer.periodic(const Duration(seconds: 10), (
           timer,
         ) {
           print(
@@ -472,6 +480,9 @@ class _HomeScreenState extends State<HomeScreen> {
           );
           // Show native notification for zone alert
           if (mounted) {
+            print(
+              'HomeScreen Log: Showing native zone alert notification for $childId',
+            ); // Log before showing notification
             _showAppNotification(title, message, isAlert: true);
           }
         });
@@ -654,11 +665,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 );
                               }
                             });
-                            _showNotification(
-                              'SOS Cleared',
-                              'SOS alert acknowledged for $childName.',
-                              isAlert: false,
-                            );
                           }
                         })
                         .catchError((error) {
@@ -787,7 +793,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       fontWeight: FontWeight.bold,
                                       color:
                                           activity.isAlert
-                                              ? Colors.white
+                                              ? kAccentCoral
                                               : kTextDark,
                                     ),
                                   ),
@@ -1140,13 +1146,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: _triggerSOSExample,
-                      child: const Text('Trigger SOS (Example Watch 1)'),
+                      onPressed:
+                          () => _simulateSafeZoneChange(
+                            childId: 'child_1',
+                            isSafe: true,
+                          ), // Simulate inside safe zone
+                      child: const Text('Simulate Watch 1 Inside Safe Zone'),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: _simulateLinaOutsideZone,
-                      child: const Text('Simulate Lina Outside Zone'),
+                      child: const Text('Trigger SOS (Example Watch 1)'),
                     ),
                   ],
                 ),
