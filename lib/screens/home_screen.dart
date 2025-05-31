@@ -4,7 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:math';
 import 'dart:async';
-import 'dart:typed_data'; // Add this import at the top
+import 'dart:typed_data';
 import 'watch_settings_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
@@ -45,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic> watches = {};
   bool loading = true;
   Map<String, bool> childZoneStatus = {};
+  Map<String, String> childStatusText = {}; // New field to store status text
   Map<String, DateTime?> lastAlertTimes = {};
   Timer? _zoneMonitoringTimer;
   StreamSubscription? _authStateSubscription;
@@ -58,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _unreadNotifications = 0;
   final Map<String, bool> _previousSosState = {};
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
   final Map<String, Timer?> _zoneAlertTimers = {};
   bool _isInitialLoad = true;
   String? _error;
@@ -69,9 +70,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<dynamic, dynamic>? _cachedWatchUpdateData;
   bool _isSOSAlertShowing = false;
   final Map<String, int> _sosNotificationIds =
-  {}; // Map to store notification IDs by childId
+      {}; // Map to store notification IDs by childId
   final Map<String, Timer?> _sosTimers =
-  {}; // Map to store timers for repeating SOS notifications
+      {}; // Map to store timers for repeating SOS notifications
   final ScrollController _sheetController = ScrollController();
   bool _notificationsEnabled = true; // State variable for notification setting
   StreamSubscription?
@@ -90,19 +91,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showNotification(
-      String title,
-      String message, {
-        bool isAlert = false,
-        bool showSnackbar = true,
-      }) {
+    String title,
+    String message, {
+    bool isAlert = false,
+    bool showSnackbar = true,
+  }) {
     if (mounted) {
       final activity = Activity(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         icon: isAlert ? Icons.warning : Icons.info,
         color:
-        isAlert
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.primary,
+            isAlert
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
         title: title,
         subtitle: message,
         time: _formatTime(DateTime.now()),
@@ -178,8 +179,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _subscribeToAuthStateChanges() {
     print('HomeScreen Log: _subscribeToAuthStateChanges called.');
     _authStateSubscription = FirebaseAuth.instance.authStateChanges().listen((
-        user,
-        ) {
+      user,
+    ) {
       print(
         'HomeScreen Log: Auth state changed listener triggered. User is null: ${user == null}',
       );
@@ -227,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     _sosTimers[childId]?.cancel(); // Cancel any existing timer
                     _sosTimers[childId] = Timer.periodic(
                       const Duration(seconds: 4),
-                          (_) {
+                      (_) {
                         print(
                           'HomeScreen Log: SOS timer triggered for $childId',
                         );
@@ -269,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
           watches = {};
           loading = false;
           childZoneStatus = {};
+          childStatusText = {};
           lastAlertTimes = {};
           activities.clear();
           _unreadNotifications = 0;
@@ -355,7 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       // Set up listeners for child events
       _watchesChildAddedSubscription = watchRef.onChildAdded.listen(
-            (event) {
+        (event) {
           if (mounted) {
             final childId = event.snapshot.key;
             final childData = event.snapshot.value as Map<dynamic, dynamic>?;
@@ -385,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       _watchesChildChangedSubscription = watchRef.onChildChanged.listen(
-            (event) {
+        (event) {
           if (mounted) {
             final childId = event.snapshot.key;
             final childData = event.snapshot.value as Map<dynamic, dynamic>?;
@@ -417,7 +419,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       _watchesChildRemovedSubscription = watchRef.onChildRemoved.listen(
-            (event) {
+        (event) {
           if (mounted) {
             final childId = event.snapshot.key;
             print('HomeScreen Log: onChildRemoved triggered for $childId');
@@ -479,6 +481,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       setState(() {
         childZoneStatus[childId] = isSafe;
+        childStatusText[childId] = isSafe ? 'Safe' : 'Outside zone';
         print(
           'HomeScreen Log: _handleStatusChange setState called. $childId safe status: ${childZoneStatus[childId]}',
         );
@@ -495,8 +498,8 @@ class _HomeScreenState extends State<HomeScreen> {
           'HomeScreen Log: Starting zone alert timer for $name (ID: $childId)',
         );
         _zoneAlertTimers[childId] = Timer.periodic(const Duration(seconds: 10), (
-            timer,
-            ) {
+          timer,
+        ) {
           print(
             'HomeScreen Log: Zone alert timer triggered for $name (ID: $childId)',
           );
@@ -530,22 +533,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool _isInSafeZone(
-      double currentLat,
-      double currentLng,
-      double zoneLat,
-      double zoneLng,
-      double zoneRadius,
-      ) {
+    double currentLat,
+    double currentLng,
+    double zoneLat,
+    double zoneLng,
+    double zoneRadius,
+  ) {
     const earthRadius = 6371000;
     final dLat = (currentLat - zoneLat).abs() * (pi / 180);
     final dLng = (currentLng - zoneLng).abs() * (pi / 180);
 
     final a =
         sin(dLat / 2) * sin(dLat / 2) +
-            cos(zoneLat * (pi / 180)) *
-                cos(currentLat * (pi / 180)) *
-                sin(dLng / 2) *
-                sin(dLng / 2);
+        cos(zoneLat * (pi / 180)) *
+            cos(currentLat * (pi / 180)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
 
     final c = 2 * atan2(sqrt(a), sqrt(1 - a));
     final distance = earthRadius * c;
@@ -610,10 +613,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _showSOSAlertDialog(
-      String childName,
-      String childId,
-      BuildContext context,
-      ) async {
+    String childName,
+    String childId,
+    BuildContext context,
+  ) async {
     if (_isSOSAlertShowing) {
       print('HomeScreen Log: SOS dialog is already showing. Returning.');
       return;
@@ -627,87 +630,87 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: false, // Make dialog non-dismissible
       builder:
           (context) => AlertDialog(
-        backgroundColor: Colors.red, // Set background to red
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Text(
-          'SOS Alert!',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onError,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.warning,
-              color: Theme.of(context).colorScheme.onError,
-              size: 60,
+            backgroundColor: Colors.red, // Set background to red
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
             ),
-            SizedBox(height: 16),
-            Text(
-              '$childName has triggered an SOS and may be unsafe.',
+            title: Text(
+              'SOS Alert!',
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onError,
                 fontWeight: FontWeight.bold,
-                fontSize: 18,
               ),
-              textAlign: TextAlign.center,
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              // Clear SOS state
-              setState(() {
-                // _isSOSAlertShowing = false; // Will be set to false by the listener when Firebase updates
-                _sosAlertTimer?.cancel();
-              });
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.warning,
+                  color: Theme.of(context).colorScheme.onError,
+                  size: 60,
+                ),
+                SizedBox(height: 16),
+                Text(
+                  '$childName has triggered an SOS and may be unsafe.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onError,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  // Clear SOS state
+                  setState(() {
+                    // _isSOSAlertShowing = false; // Will be set to false by the listener when Firebase updates
+                    _sosAlertTimer?.cancel();
+                  });
 
-              // Navigate back to map screen
-              if (context.mounted) {
-                Navigator.of(context).pop();
-              }
-
-              // Clear SOS state in Firebase
-              final user = FirebaseAuth.instance.currentUser;
-              if (user != null) {
-                FirebaseDatabase.instance
-                    .ref('users/${user.uid}/children/$childId')
-                    .update({'sos': false})
-                    .then((_) {
-                  print('SOS state cleared for $childId');
-                  // Update local state and show in-app notification after Firebase update
-                  if (mounted) {
-                    setState(() {
-                      if (watches.containsKey(childId)) {
-                        watches[childId]['sos'] = false;
-                        print(
-                          'HomeScreen Log: Local SOS state updated for $childId',
-                        );
-                      }
-                    });
+                  // Navigate back to map screen
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
                   }
-                })
-                    .catchError((error) {
-                  print('Error clearing SOS state: $error');
-                });
-              }
-              _isSOSAlertShowing =
-              false; // Ensure flag is reset after attempt to clear Firebase
-            },
-            child: Text(
-              'OK',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onError,
+
+                  // Clear SOS state in Firebase
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    FirebaseDatabase.instance
+                        .ref('users/${user.uid}/children/$childId')
+                        .update({'sos': false})
+                        .then((_) {
+                          print('SOS state cleared for $childId');
+                          // Update local state and show in-app notification after Firebase update
+                          if (mounted) {
+                            setState(() {
+                              if (watches.containsKey(childId)) {
+                                watches[childId]['sos'] = false;
+                                print(
+                                  'HomeScreen Log: Local SOS state updated for $childId',
+                                );
+                              }
+                            });
+                          }
+                        })
+                        .catchError((error) {
+                          print('Error clearing SOS state: $error');
+                        });
+                  }
+                  _isSOSAlertShowing =
+                      false; // Ensure flag is reset after attempt to clear Firebase
+                },
+                child: Text(
+                  'OK',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onError,
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -795,155 +798,155 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder:
             (context) => AlertDialog(
-          backgroundColor:
-          Theme.of(context)
-              .colorScheme
-              .surfaceVariant, // Use theme surface variant for dialog background
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Text(
-            'Notifications',
-            style: GoogleFonts.nunito(
-              fontWeight: FontWeight.bold,
-              color:
-              Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant, // Text color for dialog title
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children:
-              activities
-                  .map(
-                    (activity) => Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 4.0,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
+              backgroundColor:
+                  Theme.of(context)
+                      .colorScheme
+                      .surfaceVariant, // Use theme surface variant for dialog background
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                'Notifications',
+                style: GoogleFonts.nunito(
+                  fontWeight: FontWeight.bold,
+                  color:
+                      Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant, // Text color for dialog title
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children:
+                      activities
+                          .map(
+                            (activity) => Padding(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 4.0,
+                              ),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color:
+                                      Theme.of(
+                                        context,
+                                      ).cardColor, // Use theme card color
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(
+                                        0.05,
+                                      ), // Shadow color from theme
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: ListTile(
+                                  leading: Icon(
+                                    activity.icon,
+                                    color:
+                                        activity.isAlert
+                                            ? Theme.of(
+                                              context,
+                                            ).colorScheme.error
+                                            : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                    size: 24,
+                                  ),
+                                  title: Text(
+                                    activity.title,
+                                    style: GoogleFonts.nunito(
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          activity.isAlert
+                                              ? Theme.of(
+                                                context,
+                                              ).colorScheme.error
+                                              : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurface,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    activity.subtitle,
+                                    style: GoogleFonts.nunito(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(0.7),
+                                    ),
+                                  ),
+                                  trailing: Text(
+                                    activity.time,
+                                    style: GoogleFonts.nunito(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (mounted) {
+                      Navigator.pop(context);
+                      setState(() {
+                        activities.clear();
+                        _unreadNotifications = 0;
+                      });
+                    }
+                  },
+                  child: Text(
+                    'Clear All',
+                    style: GoogleFonts.nunito(
                       color:
-                      Theme.of(
-                        context,
-                      ).cardColor, // Use theme card color
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Theme.of(
+                          Theme.of(
                             context,
-                          ).colorScheme.onSurface.withOpacity(
-                            0.05,
-                          ), // Shadow color from theme
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ListTile(
-                      leading: Icon(
-                        activity.icon,
-                        color:
-                        activity.isAlert
-                            ? Theme.of(
-                          context,
-                        ).colorScheme.error
-                            : Theme.of(
-                          context,
-                        ).colorScheme.primary,
-                        size: 24,
-                      ),
-                      title: Text(
-                        activity.title,
-                        style: GoogleFonts.nunito(
-                          fontWeight: FontWeight.bold,
-                          color:
-                          activity.isAlert
-                              ? Theme.of(
-                            context,
-                          ).colorScheme.error
-                              : Theme.of(
-                            context,
-                          ).colorScheme.onSurface,
-                        ),
-                      ),
-                      subtitle: Text(
-                        activity.subtitle,
-                        style: GoogleFonts.nunito(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
-                      trailing: Text(
-                        activity.time,
-                        style: GoogleFonts.nunito(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withOpacity(0.6),
-                        ),
-                      ),
+                          ).colorScheme.error, // Use theme error color
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-              )
-                  .toList(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (mounted) {
-                  Navigator.pop(context);
-                  setState(() {
-                    activities.clear();
-                    _unreadNotifications = 0;
-                  });
-                }
-              },
-              child: Text(
-                'Clear All',
-                style: GoogleFonts.nunito(
-                  color:
-                  Theme.of(
-                    context,
-                  ).colorScheme.error, // Use theme error color
-                  fontWeight: FontWeight.bold,
+                TextButton(
+                  onPressed: () {
+                    if (mounted) {
+                      Navigator.pop(context);
+                      setState(() {
+                        _unreadNotifications = 0;
+                      });
+                    }
+                  },
+                  child: Text(
+                    'Close',
+                    style: GoogleFonts.nunito(
+                      color:
+                          Theme.of(
+                            context,
+                          ).colorScheme.primary, // Use theme primary color
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            TextButton(
-              onPressed: () {
-                if (mounted) {
-                  Navigator.pop(context);
-                  setState(() {
-                    _unreadNotifications = 0;
-                  });
-                }
-              },
-              child: Text(
-                'Close',
-                style: GoogleFonts.nunito(
-                  color:
-                  Theme.of(
-                    context,
-                  ).colorScheme.primary, // Use theme primary color
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
       );
     }
   }
 
   void _showAppNotification(
-      String title,
-      String message, {
-        bool isAlert = false,
-      }) {
+    String title,
+    String message, {
+    bool isAlert = false,
+  }) {
     if (!_notificationsEnabled) {
       print(
         'HomeScreen Log: Notifications disabled - skipping native notification',
@@ -963,9 +966,9 @@ class _HomeScreenState extends State<HomeScreen> {
         importance: Importance.max,
         priority: Priority.high,
         color:
-        isAlert
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.primary,
+            isAlert
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
         playSound: true,
         enableVibration: true,
         showWhen: true,
@@ -990,12 +993,12 @@ class _HomeScreenState extends State<HomeScreen> {
     print('HomeScreen Log: build called.');
     return Scaffold(
       backgroundColor:
-      Theme.of(
-        context,
-      ).colorScheme.background, // Use theme background color
+          Theme.of(
+            context,
+          ).colorScheme.background, // Use theme background color
       appBar: AppBar(
         backgroundColor:
-        Theme.of(context).colorScheme.primary, // Use theme primary color
+            Theme.of(context).colorScheme.primary, // Use theme primary color
         automaticallyImplyLeading: false,
         elevation: 0,
         leading: IconButton(
@@ -1067,9 +1070,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color:
-                  Theme.of(
-                    context,
-                  ).colorScheme.primary, // Use theme primary color
+                      Theme.of(
+                        context,
+                      ).colorScheme.primary, // Use theme primary color
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(40),
                     bottomRight: Radius.circular(40),
@@ -1114,9 +1117,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 fontSize: 20,
                                 fontWeight: FontWeight.bold,
                                 color:
-                                Theme.of(context)
-                                    .colorScheme
-                                    .onPrimary, // Text color on primary background
+                                    Theme.of(context)
+                                        .colorScheme
+                                        .onPrimary, // Text color on primary background
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -1167,15 +1170,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                 data: watchData,
                                 onConnect:
                                     () => Navigator.pushNamed(
-                                  context,
-                                  '/pair',
-                                  arguments: watchId,
-                                ),
+                                      context,
+                                      '/pair',
+                                      arguments: watchId,
+                                    ),
                                 onSettings:
                                     () => _navigateToWatchSettings(
-                                  context,
-                                  watchId: watchId,
-                                ),
+                                      context,
+                                      watchId: watchId,
+                                    ),
                                 timeFormatter: _formatTime,
                               ),
                             );
@@ -1183,18 +1186,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           if (!loading && watches.length < 2)
                             ...List.generate(
                               2 - watches.length,
-                                  (index) => Padding(
+                              (index) => Padding(
                                 padding: const EdgeInsets.only(right: 16.0),
                                 child: WatchCard(
                                   key: ValueKey(
                                     'not_connected_${watches.length + index + 1}',
                                   ),
                                   watchId:
-                                  'new_watch_${watches.length + index + 1}',
+                                      'new_watch_${watches.length + index + 1}',
                                   data: {},
                                   onConnect:
                                       () =>
-                                      Navigator.pushNamed(context, '/pair'),
+                                          Navigator.pushNamed(context, '/pair'),
                                   onSettings: () {},
                                   timeFormatter: _formatTime,
                                 ),
@@ -1228,9 +1231,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         label: const Text("Add Example Watches"),
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
-                          Theme.of(context).colorScheme.primary,
+                              Theme.of(context).colorScheme.primary,
                           foregroundColor:
-                          Theme.of(context).colorScheme.onPrimary,
+                              Theme.of(context).colorScheme.onPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -1315,16 +1318,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _initializeNotifications() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
     const DarwinInitializationSettings initializationSettingsIOS =
-    DarwinInitializationSettings();
+        DarwinInitializationSettings();
 
     const InitializationSettings initializationSettings =
-    InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
+        InitializationSettings(
+          android: initializationSettingsAndroid,
+          iOS: initializationSettingsIOS,
+        );
 
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
     print('Local notifications initialized.');
@@ -1378,9 +1381,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigateToWatchSettings(
-      BuildContext context, {
-        required String watchId,
-      }) {
+    BuildContext context, {
+    required String watchId,
+  }) {
     print('HomeScreen Log: _navigateToWatchSettings called for $watchId.');
 
     // Ensure we're not already navigating
@@ -1395,68 +1398,68 @@ class _HomeScreenState extends State<HomeScreen> {
       final localContext = context;
 
       Navigator.push(
-        localContext,
-        MaterialPageRoute(
-          builder:
-              (context) => WatchSettingsScreen(
-            watchId: watchId,
-            getWatchData: (id) => _convertToMap(watches[id]),
-            onRemove: () => _removeWatch(watchId),
-          ),
-        ),
-      )
+            localContext,
+            MaterialPageRoute(
+              builder:
+                  (context) => WatchSettingsScreen(
+                    watchId: watchId,
+                    getWatchData: (id) => _convertToMap(watches[id]),
+                    onRemove: () => _removeWatch(watchId),
+                  ),
+            ),
+          )
           .then((result) {
-        // Only update state if we're still mounted
-        if (mounted) {
-          setState(() {
-            _isNavigatingToSettings = false;
-          });
-
-          // If updatedData was returned from settings, apply it directly
-          if (result != null && result is Map) {
-            print(
-              'HomeScreen Log: Received updated data from settings: $result',
-            );
-            // Use _convertToMap to ensure all nested maps are Map<String, dynamic>
-            final Map<String, dynamic> stronglyTypedUpdatedData =
-            _convertToMap(result);
-
+            // Only update state if we're still mounted
             if (mounted) {
               setState(() {
-                watches[watchId] = stronglyTypedUpdatedData;
-                print(
-                  'HomeScreen Log: Applied strongly typed updated data for $watchId: $watches',
-                );
+                _isNavigatingToSettings = false;
               });
-            }
-          }
 
-          if (_cachedWatchUpdateData != null) {
-            // Process cached data
-            print(
-              'HomeScreen Log: Processing cached data: $_cachedWatchUpdateData',
-            );
-            // Apply cached data to watches
-            if (mounted) {
-              setState(() {
-                watches = {...watches, ..._cachedWatchUpdateData!};
+              // If updatedData was returned from settings, apply it directly
+              if (result != null && result is Map) {
                 print(
-                  'HomeScreen Log: Applied cached data to watches: $watches',
+                  'HomeScreen Log: Received updated data from settings: $result',
                 );
-              });
+                // Use _convertToMap to ensure all nested maps are Map<String, dynamic>
+                final Map<String, dynamic> stronglyTypedUpdatedData =
+                    _convertToMap(result);
+
+                if (mounted) {
+                  setState(() {
+                    watches[watchId] = stronglyTypedUpdatedData;
+                    print(
+                      'HomeScreen Log: Applied strongly typed updated data for $watchId: $watches',
+                    );
+                  });
+                }
+              }
+
+              if (_cachedWatchUpdateData != null) {
+                // Process cached data
+                print(
+                  'HomeScreen Log: Processing cached data: $_cachedWatchUpdateData',
+                );
+                // Apply cached data to watches
+                if (mounted) {
+                  setState(() {
+                    watches = {...watches, ..._cachedWatchUpdateData!};
+                    print(
+                      'HomeScreen Log: Applied cached data to watches: $watches',
+                    );
+                  });
+                }
+                _cachedWatchUpdateData = null; // Clear cached data
+              }
             }
-            _cachedWatchUpdateData = null; // Clear cached data
-          }
-        }
-      })
+          })
           .catchError((error) {
-        print('HomeScreen Log: Error in navigation: $error');
-        if (mounted) {
-          setState(() {
-            _isNavigatingToSettings = false;
+            print('HomeScreen Log: Error in navigation: $error');
+            if (mounted) {
+              setState(() {
+                _isNavigatingToSettings = false;
+              });
+            }
           });
-        }
-      });
     } catch (error) {
       print('HomeScreen Log: Error in _navigateToWatchSettings: $error');
       if (mounted) {
@@ -1491,21 +1494,21 @@ class _HomeScreenState extends State<HomeScreen> {
       watchRef
           .remove()
           .then((_) {
-        if (mounted) {
-          setState(() {
-            watches.remove(watchId);
-            _isRemovingWatch = false;
-          });
-        }
-      })
+            if (mounted) {
+              setState(() {
+                watches.remove(watchId);
+                _isRemovingWatch = false;
+              });
+            }
+          })
           .catchError((error) {
-        print('HomeScreen Log: Error removing watch: $error');
-        if (mounted) {
-          setState(() {
-            _isRemovingWatch = false;
+            print('HomeScreen Log: Error removing watch: $error');
+            if (mounted) {
+              setState(() {
+                _isRemovingWatch = false;
+              });
+            }
           });
-        }
-      });
     } catch (error) {
       print('HomeScreen Log: Error in _removeWatch: $error');
       if (mounted) {
@@ -1520,7 +1523,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (data is Map) {
       return Map<String, dynamic>.fromEntries(
         data.entries.map(
-              (entry) => MapEntry(
+          (entry) => MapEntry(
             entry.key.toString(),
             // Recursively call _convertToMap for nested maps
             entry.value is Map ? _convertToMap(entry.value) : entry.value,
@@ -1547,14 +1550,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final snapshot =
-      await FirebaseDatabase.instance
-          .ref('users/${user.uid}/settings/notificationsEnabled')
-          .get();
+          await FirebaseDatabase.instance
+              .ref('users/${user.uid}/settings/notificationsEnabled')
+              .get();
       if (snapshot.exists) {
         setState(() {
           _notificationsEnabled =
               snapshot.value as bool? ??
-                  true; // Default to true if value is null
+              true; // Default to true if value is null
         });
         print(
           'HomeScreen Log: Loaded notificationsEnabled: $_notificationsEnabled',
@@ -1579,22 +1582,22 @@ class _HomeScreenState extends State<HomeScreen> {
         .onValue
         .listen(
           (event) {
-        if (mounted) {
-          final value = event.snapshot.value as bool?;
-          setState(() {
-            _notificationsEnabled = value ?? true;
-          });
-          print(
-            'HomeScreen Log: Real-time update - notificationsEnabled: $_notificationsEnabled',
-          );
-        }
-      },
-      onError: (error) {
-        print(
-          'HomeScreen Log: Error subscribing to notification setting changes: $error',
+            if (mounted) {
+              final value = event.snapshot.value as bool?;
+              setState(() {
+                _notificationsEnabled = value ?? true;
+              });
+              print(
+                'HomeScreen Log: Real-time update - notificationsEnabled: $_notificationsEnabled',
+              );
+            }
+          },
+          onError: (error) {
+            print(
+              'HomeScreen Log: Error subscribing to notification setting changes: $error',
+            );
+          },
         );
-      },
-    );
   }
 
   void _unsubscribeFromNotificationSettings() {
@@ -1615,7 +1618,7 @@ double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
 
   final double a =
       sin(dLat / 2) * sin(dLat / 2) +
-          cos(latRad1) * cos(latRad2) * sin(dLon / 2) * sin(dLon / 2);
+      cos(latRad1) * cos(latRad2) * sin(dLon / 2) * sin(dLon / 2);
 
   final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
 
@@ -1654,7 +1657,7 @@ class CardTile extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color:
-            shadowColor ??
+                shadowColor ??
                 Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
@@ -1679,7 +1682,7 @@ class CardTile extends StatelessWidget {
         trailing: Icon(
           Icons.arrow_forward_ios,
           color:
-          trailingIconColor ??
+              trailingIconColor ??
               Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
         ),
         onTap: onTap,
@@ -1716,43 +1719,43 @@ class WatchCard extends StatelessWidget {
     print('WatchCard received data: $data');
     final isConnected = data != null && data!['location'] != null;
     Color watchColor =
-    isConnected && data!['color'] != null
-        ? Color(_hexToColor(data!['color'] as String))
-        : Theme.of(
-      context,
-    ).colorScheme.primary; // Fallback to theme primary
+        isConnected && data!['color'] != null
+            ? Color(_hexToColor(data!['color'] as String))
+            : Theme.of(
+              context,
+            ).colorScheme.primary; // Fallback to theme primary
 
     Color avatarBackgroundColor =
-    isConnected && data!['color'] != null
-        ? watchColor.withOpacity(
-      0.2,
-    ) // Use watch color with opacity if connected
-        : Theme.of(context).colorScheme.primary.withOpacity(
-      0.2,
-    ); // Use theme primary with opacity if not connected
+        isConnected && data!['color'] != null
+            ? watchColor.withOpacity(
+              0.2,
+            ) // Use watch color with opacity if connected
+            : Theme.of(context).colorScheme.primary.withOpacity(
+              0.2,
+            ); // Use theme primary with opacity if not connected
 
     Color watchIconColor =
-    isConnected && data!['color'] != null
-        ? watchColor // Use watch color if connected
-        : Theme.of(
-      context,
-    ).colorScheme.primary; // Use theme primary if not connected
+        isConnected && data!['color'] != null
+            ? watchColor // Use watch color if connected
+            : Theme.of(
+              context,
+            ).colorScheme.primary; // Use theme primary if not connected
 
     print(
       'Determined watchColor: $watchColor, avatarBackgroundColor: $avatarBackgroundColor, watchIconColor: $watchIconColor',
     );
 
     final avatar =
-    isConnected && data?['avatar'] != null
-        ? CircleAvatar(
-      backgroundImage: NetworkImage(data?['avatar']),
-      radius: 28,
-    )
-        : CircleAvatar(
-      backgroundColor: avatarBackgroundColor,
-      radius: 28,
-      child: Icon(Icons.watch, color: watchIconColor, size: 32),
-    );
+        isConnected && data?['avatar'] != null
+            ? CircleAvatar(
+              backgroundImage: NetworkImage(data?['avatar']),
+              radius: 28,
+            )
+            : CircleAvatar(
+              backgroundColor: avatarBackgroundColor,
+              radius: 28,
+              child: Icon(Icons.watch, color: watchIconColor, size: 32),
+            );
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1778,9 +1781,9 @@ class WatchCard extends StatelessWidget {
             style: GoogleFonts.nunito(
               fontWeight: FontWeight.w600,
               color:
-              Theme.of(
-                context,
-              ).colorScheme.onSurface, // Text color on card surface
+                  Theme.of(
+                    context,
+                  ).colorScheme.onSurface, // Text color on card surface
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -1800,11 +1803,11 @@ class WatchCard extends StatelessWidget {
               style: GoogleFonts.nunito(
                 fontSize: 12,
                 color:
-                data?['safe'] == true
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context)
-                    .colorScheme
-                    .secondary, // Use theme primary or secondary color for status
+                    data?['safe'] == true
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context)
+                            .colorScheme
+                            .secondary, // Use theme primary or secondary color for status
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1814,10 +1817,10 @@ class WatchCard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: watchColor, // Use the determined watch color
                 foregroundColor:
-                watchColor.computeLuminance() > 0.5
-                    ? Colors.black
-                    : Colors
-                    .white, // Determine text color based on button color luminance
+                    watchColor.computeLuminance() > 0.5
+                        ? Colors.black
+                        : Colors
+                            .white, // Determine text color based on button color luminance
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),
@@ -1835,13 +1838,13 @@ class WatchCard extends StatelessWidget {
               onPressed: onConnect,
               style: ElevatedButton.styleFrom(
                 backgroundColor:
-                Theme.of(context)
-                    .colorScheme
-                    .primary, // Use theme primary for connect button
+                    Theme.of(context)
+                        .colorScheme
+                        .primary, // Use theme primary for connect button
                 foregroundColor:
-                Theme.of(
-                  context,
-                ).colorScheme.onPrimary, // Text color on primary button
+                    Theme.of(
+                      context,
+                    ).colorScheme.onPrimary, // Text color on primary button
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(24),
                 ),

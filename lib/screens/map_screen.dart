@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'dart:ui';
 import '../widgets/widgets.dart'; // Import widgets
 import '../utils/responsive_utils.dart'; // Import ResponsiveUtils
+import 'dart:math';
 
 // Import ui for Image
 // Import theme colors
@@ -109,15 +110,83 @@ class _MapScreenState extends State<MapScreen> {
               print('MapScreen: Child raw data: $childData');
 
               // Determine the safe status for the child
-              final isSafe = childData['safe'] as bool? ?? true;
-              print('MapScreen: Child $childId isSafe status read as: $isSafe');
+              // Read the location and safe zone data
+              final locationData =
+                  childData['location'] as Map<dynamic, dynamic>?;
+              final safeZoneData =
+                  childData['safeZone'] as Map<dynamic, dynamic>?;
+
+              bool isSafe = true; // Assume safe initially
+
+              if (locationData != null && safeZoneData != null) {
+                final currentLat = locationData['lat'] as double?;
+                final currentLng = locationData['lng'] as double?;
+                final centerLat = safeZoneData['lat'] as double?;
+                final centerLng = safeZoneData['lng'] as double?;
+                final radius =
+                    safeZoneData['radius']; // Radius can be int or double
+
+                if (currentLat != null &&
+                    currentLng != null &&
+                    centerLat != null &&
+                    centerLng != null &&
+                    radius != null) {
+                  final double radiusDouble =
+                      (radius is num) ? radius.toDouble() : 0.0;
+                  // Calculate if the child is in the safe zone
+                  isSafe = _isInSafeZone(
+                    currentLat,
+                    currentLng,
+                    centerLat,
+                    centerLng,
+                    radiusDouble,
+                  );
+                  print(
+                    'MapScreen: Child $childId isSafe status calculated as: $isSafe',
+                  );
+
+                  // Save the safe status to Firebase
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    final childRef = FirebaseDatabase.instance
+                        .ref()
+                        .child('users')
+                        .child(user.uid)
+                        .child('children')
+                        .child(childId);
+
+                    childRef
+                        .update({'safe': isSafe})
+                        .then((_) {
+                          print(
+                            'MapScreen: Safe status updated in Firebase for $childId: $isSafe',
+                          );
+                        })
+                        .catchError((error) {
+                          print(
+                            'MapScreen: Error updating safe status in Firebase: $error',
+                          );
+                        });
+                  }
+                } else {
+                  print(
+                    'MapScreen: Incomplete location or safeZone data for $childId, defaulting isSafe to true.',
+                  );
+                }
+              } else {
+                print(
+                  'MapScreen: Missing location or safeZone data for $childId, defaulting isSafe to true.',
+                );
+              }
+
+              // Update the childData map with the calculated isSafe status
+              childData['safe'] = isSafe;
+
               if (!isSafe) {
                 anyUnsafe = true; // Set flag if child is unsafe
               }
 
               // Process location for markers and update history
-              final locationData =
-                  childData['location'] as Map<dynamic, dynamic>?;
               if (locationData != null) {
                 print(
                   'MapScreen: Location data found for $childId: $locationData',
@@ -207,8 +276,6 @@ class _MapScreenState extends State<MapScreen> {
               }
 
               // Process safe zone for circles
-              final safeZoneData =
-                  childData['safeZone'] as Map<dynamic, dynamic>?;
               if (safeZoneData != null) {
                 print(
                   'MapScreen: SafeZone data found for $childId: $safeZoneData',
@@ -1089,5 +1156,29 @@ class _MapScreenState extends State<MapScreen> {
     if (radius < 500) return 17.0; // Increased from 16.0
     if (radius < 1000) return 16.0; // Increased from 15.0
     return 15.0; // Default for larger radii, increased from 14.0
+  }
+
+  bool _isInSafeZone(
+    double currentLat,
+    double currentLng,
+    double zoneLat,
+    double zoneLng,
+    double zoneRadius,
+  ) {
+    const earthRadius = 6371000;
+    final dLat = (currentLat - zoneLat).abs() * (pi / 180);
+    final dLng = (currentLng - zoneLng).abs() * (pi / 180);
+
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(zoneLat * (pi / 180)) *
+            cos(currentLat * (pi / 180)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    final distance = earthRadius * c;
+
+    return distance <= zoneRadius;
   }
 }
