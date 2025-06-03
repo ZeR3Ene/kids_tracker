@@ -12,25 +12,36 @@ import 'screens/map_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/settings_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (kIsWeb) {
-    await Firebase.initializeApp(
-      options: const FirebaseOptions(
-        apiKey: 'PASTE_YOUR_API_KEY_HERE',
-        appId: 'PASTE_YOUR_APP_ID_HERE',
-        messagingSenderId: 'PASTE_YOUR_MESSAGING_SENDER_ID_HERE',
-        projectId: 'PASTE_YOUR_PROJECT_ID_HERE',
-        authDomain: 'PASTE_YOUR_AUTH_DOMAIN_HERE',
-        databaseURL: 'PASTE_YOUR_DATABASE_URL_HERE',
-        storageBucket: 'PASTE_YOUR_STORAGE_BUCKET_HERE',
-      ),
+
+  try {
+    // Initialize Firebase with options
+    const FirebaseOptions options = FirebaseOptions(
+      apiKey: "AIzaSyBpYRuzI54IkNUyqy4MvPWm8DBHDsnBj0",
+      authDomain: "kids-tracker-76981.firebaseapp.com",
+      databaseURL:
+          "https://kids-tracker-76981-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "kids-tracker-76981",
+      storageBucket: "kids-tracker-76981.appspot.com",
+      messagingSenderId: "your-messaging-sender-id",
+      appId: "your-app-id",
     );
-  } else {
-    await Firebase.initializeApp();
+
+    // Check if Firebase is already initialized
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(name: 'kids-tracker', options: options);
+    } else {
+      // Get existing Firebase app
+      Firebase.app('kids-tracker');
+    }
+  } catch (e) {
+    debugPrint('Firebase initialization error: $e');
   }
-  runApp(AppRoot());
+
+  runApp(const AppRoot());
 }
 
 class AppRoot extends StatefulWidget {
@@ -42,6 +53,7 @@ class AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<AppRoot> {
   ThemeMode _themeMode = ThemeMode.light;
+  bool _firebaseConnected = false;
 
   void toggleTheme() {
     setState(() {
@@ -50,12 +62,43 @@ class _AppRootState extends State<AppRoot> {
     });
   }
 
+  Future<void> checkFirebaseConnection() async {
+    try {
+      // Test Firebase connection
+      final database = FirebaseDatabase.instance;
+      final ref = database.ref('test_connection');
+      await ref.set('connected');
+      setState(() {
+        _firebaseConnected = true;
+      });
+    } catch (e) {
+      debugPrint('Firebase connection check failed: $e');
+      setState(() {
+        _firebaseConnected = false;
+      });
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Check Firebase connection
+    checkFirebaseConnection().then((_) {
+      if (!_firebaseConnected) {
+        debugPrint('Failed to connect to Firebase');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ThemeSwitcher(
-      themeMode: _themeMode,
-      toggleTheme: toggleTheme,
-      child: MyApp(themeMode: _themeMode),
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: ThemeSwitcher(
+        themeMode: _themeMode,
+        toggleTheme: toggleTheme,
+        child: MyApp(themeMode: _themeMode),
+      ),
     );
   }
 }
@@ -69,8 +112,10 @@ class ThemeSwitcher extends InheritedWidget {
     required this.toggleTheme,
     required super.child,
   });
+
   static ThemeSwitcher of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<ThemeSwitcher>()!;
+
   @override
   bool updateShouldNotify(ThemeSwitcher oldWidget) =>
       themeMode != oldWidget.themeMode;
@@ -146,6 +191,13 @@ class MyApp extends StatelessWidget {
         '/settings': (context) => const SettingsScreen(),
         '/generalSettings': (context) => const SettingsScreen(),
       },
+      onUnknownRoute: (settings) {
+        return MaterialPageRoute(
+          builder:
+              (context) =>
+                  const Scaffold(body: Center(child: Text('Route not found'))),
+        );
+      },
     );
   }
 }
@@ -195,17 +247,18 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final List<Color> gradientColors = isDarkMode
-        ? [
-      Theme.of(context).scaffoldBackgroundColor,
-      Theme.of(context).colorScheme.surfaceVariant,
-      Theme.of(context).colorScheme.surface,
-    ]
-        : [
-      const Color(0xFF7EE6D9),
-      const Color(0xFFB2F7EF),
-      const Color(0xFFFFF6F6),
-    ];
+    final List<Color> gradientColors =
+        isDarkMode
+            ? [
+              Theme.of(context).scaffoldBackgroundColor,
+              Theme.of(context).colorScheme.surfaceVariant,
+              Theme.of(context).colorScheme.surface,
+            ]
+            : [
+              const Color(0xFF7EE6D9),
+              const Color(0xFFB2F7EF),
+              const Color(0xFFFFF6F6),
+            ];
 
     return Scaffold(
       body: Stack(
@@ -224,9 +277,9 @@ class _SplashScreenState extends State<SplashScreen>
             left: 20,
             child: Icon(
               Icons.cloud,
-              color: Theme.of(context).colorScheme.onBackground.withOpacity(
-                isDarkMode ? 0.1 : 0.25,
-              ),
+              color: Theme.of(
+                context,
+              ).colorScheme.onBackground.withOpacity(isDarkMode ? 0.1 : 0.25),
               size: 60,
             ),
           ),
@@ -235,9 +288,9 @@ class _SplashScreenState extends State<SplashScreen>
             right: 30,
             child: Icon(
               Icons.cloud,
-              color: Theme.of(context).colorScheme.onBackground.withOpacity(
-                isDarkMode ? 0.1 : 0.18,
-              ),
+              color: Theme.of(
+                context,
+              ).colorScheme.onBackground.withOpacity(isDarkMode ? 0.1 : 0.18),
               size: 80,
             ),
           ),
@@ -256,16 +309,15 @@ class _SplashScreenState extends State<SplashScreen>
                         borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: Theme.of(context).shadowColor.withOpacity(0.4),
+                            color: Theme.of(
+                              context,
+                            ).shadowColor.withOpacity(0.4),
                             blurRadius: 12,
                           ),
                         ],
                       ),
                       clipBehavior: Clip.hardEdge,
-                      child: Image.asset(
-                        'assets/logo.png',
-                        fit: BoxFit.cover,
-                      ),
+                      child: Image.asset('assets/logo.png', fit: BoxFit.cover),
                     ),
                   ),
                   const SizedBox(height: 24),

@@ -136,14 +136,45 @@ class _QRPairScreenState extends State<QRPairScreen> {
           'users/${user.uid}/children/$watchId',
         );
 
-        watchRef.onValue.listen((event) {
+        String? previousStatus;
+        bool safeZoneSet = false;
+        watchRef.onValue.listen((event) async {
           if (mounted) {
             final data = event.snapshot.value as Map;
-            if (data['status'] == 'online') {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Watch is now online!')),
-              );
+            final currentStatus = data['status'] as String?;
+            final safeZone = data['safeZone'] as Map?;
+            final lastLocation = data['lastLocation'] as Map?;
+            final lat = lastLocation?['latitude'] ?? 0.0;
+            final lng = lastLocation?['longitude'] ?? 0.0;
+            final safeLat = safeZone?['latitude'] ?? 0.0;
+            final safeLng = safeZone?['longitude'] ?? 0.0;
+            // Only set safeZone if:
+            // - status just transitioned to online
+            // - safeZone is still default (0,0)
+            // - lastLocation is a real coordinate (not 0,0)
+            if (currentStatus == 'online' &&
+                previousStatus != 'online' &&
+                !safeZoneSet) {
+              if ((lat != 0.0 || lng != 0.0) &&
+                  (safeLat == 0.0 && safeLng == 0.0)) {
+                await watchRef.update({
+                  'safeZone': {
+                    'radius': safeZone?['radius'] ?? 100.0,
+                    'latitude': lat,
+                    'longitude': lng,
+                  },
+                });
+                safeZoneSet = true;
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Safe area set to watch location!'),
+                    ),
+                  );
+                }
+              }
             }
+            previousStatus = currentStatus;
 
             // Update map screen if it's open
             if (Navigator.of(context).canPop()) {

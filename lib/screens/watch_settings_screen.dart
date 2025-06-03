@@ -70,10 +70,34 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
         final data = snapshot.value as Map<dynamic, dynamic>;
         final Map<String, dynamic> watchData = Map.from(data);
 
+        // Get location data
+        final location = watchData['location'] as Map<dynamic, dynamic>?;
+
+        // Initialize safe zone with watch's location if available
+        if (location != null &&
+            location['lat'] != null &&
+            location['lng'] != null) {
+          _safeZone = {
+            'lat': location['lat'] as double,
+            'lng': location['lng'] as double,
+            'radius': 100.0, // Default radius of 100 meters
+            'color': _color,
+          };
+        } else {
+          // If no location, use existing safe zone or default to center
+          _safeZone =
+              watchData['safeZone'] ??
+              {
+                'lat': 32.4617, // Default center latitude
+                'lng': 35.3006, // Default center longitude
+                'radius': 100.0,
+                'color': _color,
+              };
+        }
+
         setState(() {
           _nameController.text = watchData['name'] ?? '';
           _color = watchData['color'] ?? '#2EC4B6';
-          _safeZone = watchData['safeZone'];
         });
       } else {
         setState(() {
@@ -117,47 +141,31 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
         'safeZoneColor': _safeZone?['color'] ?? _color,
       };
 
+      // If we have a location, update it in the updates map
+      final location = {
+        'lat': _safeZone?['lat'] as double?,
+        'lng': _safeZone?['lng'] as double?,
+      };
+      if (location['lat'] != null && location['lng'] != null) {
+        updates['location'] = location;
+      }
+
       final watchRef = FirebaseDatabase.instance.ref(
         'users/${user.uid}/children/${watchId}',
       );
 
-      // First update the database
       await watchRef.update(updates);
 
-      // Then show notification and navigate
       if (mounted) {
-        _showTopNotification('Watch settings saved!', color: Colors.green);
-
-        // Use a small delay before navigation to ensure UI updates are complete
-        await Future.delayed(const Duration(milliseconds: 100));
-
-        if (context.mounted) {
-          // Create a copy of the updates map
-          final result = Map<String, dynamic>.from(updates);
-
-          // Add the watch ID to the result
-          result['id'] = watchId;
-
-          // Add the current watch data to ensure we have all fields
-          final currentData = widget.getWatchData(watchId);
-          if (currentData != null) {
-            result.addAll(Map<String, dynamic>.from(currentData));
-          }
-
-          // Navigate back with the complete data
-          Navigator.of(context, rootNavigator: true).pop(result);
-        }
+        setState(() {
+          _loading = false;
+        });
+        Navigator.pop(context, updates);
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = 'Error saving watch data: $e';
-          _loading = false;
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
           _loading = false;
         });
       }
@@ -298,23 +306,10 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
       appBar: AppBar(
         elevation: 4,
         backgroundColor: theme.colorScheme.primary,
-        title: Text(
-          'Watch Settings',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: theme.appBarTheme.foregroundColor,
-          ),
-          textAlign: TextAlign.center,
-        ),
         centerTitle: true,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios,
-            size: 24,
-            color: theme.appBarTheme.foregroundColor,
-          ),
-          onPressed: () => Navigator.pop(context),
+        title: const Text(
+          'Watch Settings',
+          style: TextStyle(color: Colors.white),
         ),
       ),
       body: AnimatedSwitcher(
