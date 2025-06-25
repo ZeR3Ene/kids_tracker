@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "932930484934",
+    "firebase_url": "https://kids-tracker-76981-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "kids-tracker-76981",
+    "storage_bucket": "kids-tracker-76981.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932930484934:android:f37131f29c56f5fd1e75c7",
+        "android_client_info": {
+          "package_name": "com.example.kids_tracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "932930484934-cde8tml244uad6bis1rpjhs3r2gupsj9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTHxy2L3-k2EUKaYZddfni8d3zLBl3bT4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "932930484934-cde8tml244uad6bis1rpjhs3r2gupsj9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "932930484934-fnf6j39u70jjrcuia8rrciue3i1hcfge.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.kidstracker"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,223 @@
+#include <WiFi.h>
+#include <Firebase_ESP_Client.h>
+#include <TinyGPSPlus.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+
+// -------------------- Configuration --------------------
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define API_KEY "YOUR_API_KEY"
+#define DATABASE_URL "YOUR_DATABASE_URL"
+#define USER_EMAIL "YOUR_EMAIL"
+#define USER_PASSWORD "YOUR_PASSWORD"
+#define SOS_BUTTON_PIN 4
+#define SOS_DEBOUNCE_DELAY 500
+
+// -------------------- Firebase & GPS --------------------
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(2); // RX = GPIO16, TX = GPIO17
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
+
+// -------------------- Variables --------------------
+String watchId = "";
+String userId = "";
+bool lastSOSState = HIGH;
+unsigned long lastLocationUpdate = 0;
+unsigned long lastSOSDebounceTime = 0;
+
+// -------------------- Token Callback --------------------
+void tokenStatusCallback(TokenInfo info) {
+  Serial.println("Token Status: " + String(info.status));
+}
+
+// -------------------- Connect to WiFi --------------------
+void connectToWiFi() {
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to WiFi");
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  Serial.println(WiFi.status() == WL_CONNECTED ? "\n✅ Connected to WiFi" : "\n❌ Failed to connect to WiFi");
+}
+
+// -------------------- Ensure Valid GPS Signal --------------------
+bool ensureValidGPS(unsigned long timeout = 5000) {
+  unsigned long start = millis();
+  while (millis() - start < timeout) {
+    while (gpsSerial.available()) {
+      gps.encode(gpsSerial.read());
+    }
+    if (gps.location.isValid() && gps.satellites.value() >= 4) {
+      return true;
+    }
+    delay(100);
+  }
+  Serial.println("⚠ Timed out waiting for a valid GPS signal.");
+  return false;
+}
+
+// -------------------- Setup Firebase --------------------
+void setupFirebase() {
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+  auth.user.email = USER_EMAIL;
+  auth.user.password = USER_PASSWORD;
+  config.token_status_callback = tokenStatusCallback;
+
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  Serial.println("🔄 Logging into Firebase...");
+  while (!Firebase.ready()) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  if (Firebase.ready() && auth.token.uid.length() > 0) {
+    userId = auth.token.uid.c_str();
+    watchId = WiFi.macAddress();
+    String basePath = "/watches/" + watchId;
+
+    if (!Firebase.RTDB.getString(&fbdo, basePath + "/name")) {
+      Serial.println("⚙ First-time setup for this watch...");
+
+      float defaultLat = 0, defaultLng = 0;
+      if (ensureValidGPS()) {
+        defaultLat = gps.location.lat();
+        defaultLng = gps.location.lng();
+        Serial.printf("✅ Safe zone from GPS: %.6f, %.6f\n", defaultLat, defaultLng);
+      } else {
+        Serial.println("⚠ GPS not valid, setting safeZone to (0,0)");
+      }
+
+      FirebaseJson initData;
+      initData.set("name", "New Watch");
+      initData.set("color", "#007AFF");
+      initData.set("safe", true);
+      initData.set("userId", userId);
+      initData.set("isSOSActive", false);
+      initData.set("location/latitude", defaultLat);
+      initData.set("location/longitude", defaultLng);
+      initData.set("safeZone/latitude", defaultLat);
+      initData.set("safeZone/longitude", defaultLng);
+      initData.set("safeZone/radius", 100.0);
+      
+      Firebase.RTDB.updateNode(&fbdo, basePath.c_str(), &initData);
+      Serial.println("✅ Firebase initial setup completed");
+    } else {
+      Serial.println("ℹ Watch already initialized");
+    }
+
+    timeClient.begin();
+    timeClient.update();
+  } else {
+    Serial.print("❌ Firebase login failed: ");
+    Serial.println(fbdo.errorReason());
+  }
+}
+
+// -------------------- Update Device Location --------------------
+void updateDeviceLocation() {
+  if (!ensureValidGPS(2000)) {
+    Serial.println("⚠ Weak or invalid GPS signal. Skipping location update.");
+    return;
+  }
+
+  float lat = gps.location.lat();
+  float lng = gps.location.lng();
+
+  String basePath = "/watches/" + watchId;
+  timeClient.update();
+
+  FirebaseJson locationData;
+  locationData.set("location/latitude", lat);
+  locationData.set("location/longitude", lng);
+  locationData.set("lastUpdate", (unsigned long)timeClient.getEpochTime() * 1000);
+  
+  if (Firebase.RTDB.updateNode(&fbdo, basePath.c_str(), &locationData)) {
+    Serial.printf("📍 Updated Location: %.6f, %.6f\n", lat, lng);
+  } else {
+    Serial.println("❌ Failed to update location: " + fbdo.errorReason());
+  }
+}
+
+// -------------------- Trigger SOS Alert --------------------
+void triggerSOS() {
+  Serial.println("🚨 SOS button pressed! Acquiring location...");
+  
+  String basePath = "/watches/" + watchId;
+  FirebaseJson sosData;
+  sosData.set("isSOSActive", true);
+
+  if (ensureValidGPS()) {
+    sosData.set("location/latitude", gps.location.lat());
+    sosData.set("location/longitude", gps.location.lng());
+    Serial.println("✅ Location acquired for SOS.");
+  } else {
+    Serial.println("⚠ Could not get GPS location for SOS. Sending alert without location.");
+  }
+  
+  if (Firebase.RTDB.updateNode(&fbdo, basePath.c_str(), &sosData)) {
+    Serial.println("🚨 SOS activated and uploaded");
+  } else {
+    Serial.println("❌ Failed to send SOS: " + fbdo.errorReason());
+  }
+}
+
+// -------------------- Clear SOS Alert --------------------
+void clearSOS() {
+  Serial.println("🟢 SOS button released. Clearing alert.");
+  String basePath = "/watches/" + watchId;
+  FirebaseJson clearData;
+  clearData.set("isSOSActive", false);
+  
+  if (!Firebase.RTDB.updateNode(&fbdo, basePath.c_str(), &clearData)) {
+    Serial.println("❌ Failed to clear SOS: " + fbdo.errorReason());
+  }
+}
+
+// -------------------- Setup --------------------
+void setup() {
+  Serial.begin(115200);
+  gpsSerial.begin(9600, SERIAL_8N1, 16, 17);
+  pinMode(SOS_BUTTON_PIN, INPUT_PULLUP);
+
+  connectToWiFi();
+  if (WiFi.status() == WL_CONNECTED) {
+    setupFirebase();
+  }
+}
+
+// -------------------- Loop --------------------
+void loop() {
+  if (WiFi.status() != WL_CONNECTED || !Firebase.ready()) {
+    return; // Do nothing if not connected
+  }
+
+  unsigned long now = millis();
+  int buttonState = digitalRead(SOS_BUTTON_PIN);
+
+  if (buttonState == LOW && lastSOSState == HIGH && now - lastSOSDebounceTime > SOS_DEBOUNCE_DELAY) {
+    lastSOSDebounceTime = now;
+    triggerSOS();
+  } else if (buttonState == HIGH && lastSOSState == LOW) {
+    clearSOS();
+  }
+  lastSOSState = buttonState;
+
+  if (now - lastLocationUpdate > 5000) {
+    updateDeviceLocation();
+    lastLocationUpdate = now;
+  }
+
+  delay(100);
+}
