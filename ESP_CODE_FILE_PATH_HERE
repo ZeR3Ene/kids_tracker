@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
 #include <TinyGPSPlus.h>
@@ -221,3 +222,6 @@ void loop() {
 
   delay(100);
 }
+=======
+
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae

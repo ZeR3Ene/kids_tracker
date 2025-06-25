@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+<<<<<<< HEAD
 import '../screens/home_screen.dart'; // لاستيراد كلاس Activity
 
 class ActivityList extends StatelessWidget {
@@ -22,5 +23,14 @@ class ActivityList extends StatelessWidget {
         );
       },
     );
+=======
+
+class ActivityList extends StatelessWidget {
+  const ActivityList({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: Text('Activity List Content'));
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
   }
 }

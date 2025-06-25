@@ -45,11 +45,14 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+<<<<<<< HEAD
 	<key>NSCameraUsageDescription</key>
 	<string>This app needs camera access to scan QR codes for pairing child watches.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app needs location access to track child watches and set safe zones.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>This app needs location access to track child watches and set safe zones.</string>
+=======
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
 </dict>
 </plist>

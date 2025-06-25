@@ -31,7 +31,11 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.1.0  # Add HTTP package for ESP32 WiFi communication
+<<<<<<< HEAD
   permission_handler: ^11.2.1  # Add permission handler for location access
+=======
+
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8

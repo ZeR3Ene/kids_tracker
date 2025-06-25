@@ -72,6 +72,7 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
 
         // Get location data
         final location = watchData['location'] as Map<dynamic, dynamic>?;
+<<<<<<< HEAD
         final safeZoneData = watchData['safeZone'] as Map<dynamic, dynamic>?;
 
         // Helper function to safely convert num to double
@@ -96,10 +97,21 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
           _safeZone = {
             'latitude': toDouble(location['latitude']),
             'longitude': toDouble(location['longitude']),
+=======
+
+        // Initialize safe zone with watch's location if available
+        if (location != null &&
+            location['lat'] != null &&
+            location['lng'] != null) {
+          _safeZone = {
+            'lat': location['lat'] as double,
+            'lng': location['lng'] as double,
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
             'radius': 100.0, // Default radius of 100 meters
             'color': _color,
           };
         } else {
+<<<<<<< HEAD
           // Default if no data is available
           _safeZone = {
             'latitude': 32.4617,
@@ -107,6 +119,17 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
             'radius': 100.0,
             'color': _color,
           };
+=======
+          // If no location, use existing safe zone or default to center
+          _safeZone =
+              watchData['safeZone'] ??
+              {
+                'lat': 32.4617, // Default center latitude
+                'lng': 35.3006, // Default center longitude
+                'radius': 100.0,
+                'color': _color,
+              };
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
         }
 
         setState(() {
@@ -148,6 +171,7 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
         return;
       }
 
+<<<<<<< HEAD
       final watchRef = FirebaseDatabase.instance.ref(
         'users/${user.uid}/children/${watchId}',
       );
@@ -155,14 +179,34 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
       final currentData = snapshot.value as Map? ?? {};
       final macAddress = currentData['macAddress'];
 
+=======
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
       final updates = {
         'name': _nameController.text.trim(),
         'color': _color,
         'safeZone': _safeZone,
         'safeZoneColor': _safeZone?['color'] ?? _color,
+<<<<<<< HEAD
         if (macAddress != null) 'macAddress': macAddress,
       };
 
+=======
+      };
+
+      // If we have a location, update it in the updates map
+      final location = {
+        'lat': _safeZone?['lat'] as double?,
+        'lng': _safeZone?['lng'] as double?,
+      };
+      if (location['lat'] != null && location['lng'] != null) {
+        updates['location'] = location;
+      }
+
+      final watchRef = FirebaseDatabase.instance.ref(
+        'users/${user.uid}/children/${watchId}',
+      );
+
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
       await watchRef.update(updates);
 
       if (mounted) {
@@ -578,8 +622,13 @@ class _SafeZonePickerScreenState extends State<SafeZonePickerScreen> {
     super.initState();
     if (widget.initial != null) {
       _center = LatLng(
+<<<<<<< HEAD
         (widget.initial!['latitude'] ?? 0).toDouble(),
         (widget.initial!['longitude'] ?? 0).toDouble(),
+=======
+        (widget.initial!['lat'] ?? 0).toDouble(),
+        (widget.initial!['lng'] ?? 0).toDouble(),
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
       );
       _radius = (widget.initial!['radius'] ?? 100).toDouble();
     } else {
@@ -639,8 +688,13 @@ class _SafeZonePickerScreenState extends State<SafeZonePickerScreen> {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context, {
+<<<<<<< HEAD
                       'latitude': _center!.latitude,
                       'longitude': _center!.longitude,
+=======
+                      'lat': _center!.latitude,
+                      'lng': _center!.longitude,
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                       'radius': _radius,
                     });
                   },

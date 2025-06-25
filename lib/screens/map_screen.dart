@@ -15,7 +15,11 @@ import 'dart:math';
 
 const Color kPrimaryCyan = Color(0xFF2EC4B6);
 const Color kAccentCoral = Color(0xFFFF6F61);
+<<<<<<< HEAD
 const Color kSoftBaczkground = Color(0xFFF0FDFC);
+=======
+const Color kSoftBackground = Color(0xFFF0FDFC);
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
 const Color kCardBackground = Color(0xFFFFFFFF); // Import kCardBackground
 
 class MapScreen extends StatefulWidget {
@@ -34,7 +38,10 @@ class _MapScreenState extends State<MapScreen> {
       DraggableScrollableController();
 
   static const LatLng _initialPosition = LatLng(32.4617, 35.3006);
+<<<<<<< HEAD
   double _currentZoom = 15.0; // حفظ الزوم الحالي
+=======
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
   Set<Marker> _markers = {};
   Set<Circle> _circles = {};
   Set<Polyline> _polylines = {}; // Add a set for polylines
@@ -119,6 +126,7 @@ class _MapScreenState extends State<MapScreen> {
 
               bool isSafe = true; // Assume safe initially
 
+<<<<<<< HEAD
               // --- تعديل هنا: دعم lat/lng ---
               double? getLat(Map<dynamic, dynamic>? data) {
                 if (data == null) return null;
@@ -138,6 +146,13 @@ class _MapScreenState extends State<MapScreen> {
                 final currentLng = getLng(locationData);
                 final centerLat = getLat(safeZoneData);
                 final centerLng = getLng(safeZoneData);
+=======
+              if (locationData != null && safeZoneData != null) {
+                final currentLat = locationData['lat'] as double?;
+                final currentLng = locationData['lng'] as double?;
+                final centerLat = safeZoneData['lat'] as double?;
+                final centerLng = safeZoneData['lng'] as double?;
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                 final radius =
                     safeZoneData['radius']; // Radius can be int or double
 
@@ -206,11 +221,18 @@ class _MapScreenState extends State<MapScreen> {
                 print(
                   'MapScreen: Location data found for $childId: $locationData',
                 );
+<<<<<<< HEAD
                 final lat = getLat(locationData);
                 final lng = getLng(locationData);
 
                 // Only process if the location is valid (not the dummy 0,0 location)
                 if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) {
+=======
+                final lat = locationData['lat'] as double?;
+                final lng = locationData['lng'] as double?;
+
+                if (lat != null && lng != null) {
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                   print(
                     'MapScreen: Extracted lat: $lat, lng: $lng for $childId',
                   );
@@ -260,6 +282,7 @@ class _MapScreenState extends State<MapScreen> {
                       });
                       // Minimize the draggable sheet when marker is tapped
                       _sheetController.animateTo(
+<<<<<<< HEAD
                         0.15,
                         duration: const Duration(milliseconds: 300),
                         curve: Curves.easeOut,
@@ -267,6 +290,17 @@ class _MapScreenState extends State<MapScreen> {
                     },
                   );
                   newMarkers.add(marker);
+=======
+                        0.15, // Animate to the new minimum size
+                        duration: const Duration(
+                          milliseconds: 300,
+                        ), // Animation duration
+                        curve: Curves.easeOut, // Animation curve
+                      );
+                    },
+                  );
+                  newMarkers.add(marker); // Add to the new set
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                   print('MapScreen: Added marker for $childId.');
 
                   // Create polyline from history
@@ -286,6 +320,7 @@ class _MapScreenState extends State<MapScreen> {
                       'MapScreen: Added polyline for $childId with ${_childrenLocationHistory[childId]?.length} points.',
                     ); // Debug print
                   }
+<<<<<<< HEAD
                 } else {
                   print(
                     'MapScreen: Invalid or dummy location for $childId. Skipping marker.',
@@ -293,10 +328,14 @@ class _MapScreenState extends State<MapScreen> {
                 }
               } else {
                 print('MapScreen: No location data found for $childId');
+=======
+                }
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
               }
 
               // Process safe zone for circles
               if (safeZoneData != null) {
+<<<<<<< HEAD
                 final centerLat = getLat(safeZoneData);
                 final centerLng = getLng(safeZoneData);
 
@@ -305,6 +344,19 @@ class _MapScreenState extends State<MapScreen> {
                     centerLng != null &&
                     (centerLat != 0.0 || centerLng != 0.0)) {
                   final radius = safeZoneData['radius'];
+=======
+                print(
+                  'MapScreen: SafeZone data found for $childId: $safeZoneData',
+                );
+                final centerLat = safeZoneData['lat'] as double?;
+                final centerLng = safeZoneData['lng'] as double?;
+                final radius =
+                    safeZoneData['radius']; // Radius can be int or double from Firebase
+
+                if (centerLat != null && centerLng != null && radius != null) {
+                  final center = LatLng(centerLat, centerLng);
+                  // Ensure radius is a double
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                   final double radiusDouble =
                       (radius is num) ? radius.toDouble() : 0.0;
                   print(
@@ -335,13 +387,21 @@ class _MapScreenState extends State<MapScreen> {
 
                   final circle = Circle(
                     circleId: CircleId(childId),
+<<<<<<< HEAD
                     center: LatLng(centerLat, centerLng),
+=======
+                    center: center,
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                     radius: radiusDouble, // Use the double radius
                     fillColor: circleColor, // Semi-transparent fill
                     strokeColor: strokeColor,
                     strokeWidth: 2,
                   );
+<<<<<<< HEAD
                   newCircles.add(circle);
+=======
+                  newCircles.add(circle); // Add to the new set
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                   print('MapScreen: Added circle for $childId.');
                 }
               }
@@ -407,9 +467,13 @@ class _MapScreenState extends State<MapScreen> {
             if (_markers.isNotEmpty) {
               _centerMap(_markers.first.position);
               print('MapScreen: setState called and map centering attempted.');
+<<<<<<< HEAD
               print(
                 'MapScreen: Centering map to [38;5;246m[48;5;236m${_markers.first.position}[0m with zoom $_currentZoom',
               );
+=======
+              print('MapScreen: Centering map to ${_markers.first.position}');
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
             } else {
               print('MapScreen: setState called but no markers to center on.');
             }
@@ -522,9 +586,12 @@ class _MapScreenState extends State<MapScreen> {
               },
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
+<<<<<<< HEAD
               onCameraMove: (CameraPosition position) {
                 _currentZoom = position.zoom;
               },
+=======
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
             ),
             DraggableScrollableSheet(
               controller: _sheetController,
@@ -658,11 +725,17 @@ class _MapScreenState extends State<MapScreen> {
                                               as Map<dynamic, dynamic>?;
                                       if (locationData != null) {
                                         final lat =
+<<<<<<< HEAD
                                             (locationData['latitude'] as num?)
                                                 ?.toDouble();
                                         final lng =
                                             (locationData['longitude'] as num?)
                                                 ?.toDouble();
+=======
+                                            locationData['lat'] as double?;
+                                        final lng =
+                                            locationData['lng'] as double?;
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                                         if (lat != null && lng != null) {
                                           final position = LatLng(lat, lng);
                                           print(
@@ -675,6 +748,7 @@ class _MapScreenState extends State<MapScreen> {
                                                   as Map<dynamic, dynamic>?;
                                           if (safeZoneData != null) {
                                             final centerLat =
+<<<<<<< HEAD
                                                 (safeZoneData['latitude']
                                                         as num?)
                                                     ?.toDouble();
@@ -682,6 +756,11 @@ class _MapScreenState extends State<MapScreen> {
                                                 (safeZoneData['longitude']
                                                         as num?)
                                                     ?.toDouble();
+=======
+                                                safeZoneData['lat'] as double?;
+                                            final centerLng =
+                                                safeZoneData['lng'] as double?;
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                                             final radius =
                                                 safeZoneData['radius']; // Radius can be int or double from Firebase
 
@@ -944,6 +1023,7 @@ class _MapScreenState extends State<MapScreen> {
                                                         >?;
                                                 if (locationData != null) {
                                                   final lat =
+<<<<<<< HEAD
                                                       (locationData['latitude']
                                                               as num?)
                                                           ?.toDouble();
@@ -951,6 +1031,13 @@ class _MapScreenState extends State<MapScreen> {
                                                       (locationData['longitude']
                                                               as num?)
                                                           ?.toDouble();
+=======
+                                                      locationData['lat']
+                                                          as double?;
+                                                  final lng =
+                                                      locationData['lng']
+                                                          as double?;
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                                                   if (lat != null &&
                                                       lng != null) {
                                                     final position = LatLng(
@@ -966,6 +1053,7 @@ class _MapScreenState extends State<MapScreen> {
                                                             >?;
                                                     if (safeZoneData != null) {
                                                       final centerLat =
+<<<<<<< HEAD
                                                           (safeZoneData['latitude']
                                                                   as num?)
                                                               ?.toDouble();
@@ -973,6 +1061,13 @@ class _MapScreenState extends State<MapScreen> {
                                                           (safeZoneData['longitude']
                                                                   as num?)
                                                               ?.toDouble();
+=======
+                                                          safeZoneData['lat']
+                                                              as double?;
+                                                      final centerLng =
+                                                          safeZoneData['lng']
+                                                              as double?;
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
                                                       final radius =
                                                           safeZoneData['radius']; // Radius can be int or double
 
@@ -1129,10 +1224,15 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _centerMap(LatLng location) async {
     final controller = await _controller.future;
+<<<<<<< HEAD
     controller.animateCamera(
       CameraUpdate.newLatLngZoom(location, _currentZoom),
     );
     print('MapScreen: Centering map to $location with zoom $_currentZoom');
+=======
+    controller.animateCamera(CameraUpdate.newLatLngZoom(location, 15.0));
+    print('MapScreen: Centering map to $location');
+>>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
   }
 
   void _updateMarkersAndCircles(Map<String, dynamic> childrenData) {
