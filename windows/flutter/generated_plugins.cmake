@@ -7,10 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   firebase_core
   flutter_secure_storage_windows
   geolocator_windows
-<<<<<<< HEAD
   permission_handler_windows
-=======
->>>>>>> 62b6a07f4877dcdbe997cf47726dc5d75fb624ae
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
