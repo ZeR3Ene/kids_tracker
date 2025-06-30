@@ -11,11 +11,12 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../widgets/activity_list.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const Color kPrimaryCyan = Color(0xFF2EC4B6);
 const Color kAccentCoral = Color(0xFFFF6F61);
 const Color kSoftBackground = Color(0xFFF0FDFC);
-const Color kCardBackground = Color(0xFFFFFFFF); // Import kCardBackground
+const Color kCardBackground = Color(0xFFFFFFFF);
 
 class Activity {
   final String id;
@@ -45,13 +46,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late User? user; // Firebase user
-  late DatabaseReference _childrenRef; // Reference to children data
-  late DatabaseReference _watchesRef; // Reference to watches data
+  late User? user;
+  late DatabaseReference _childrenRef;
+  late DatabaseReference _watchesRef;
   Timer? _refreshTimer;
   StreamSubscription? _childrenSubscription;
   Map<String, StreamSubscription> _watchSubscriptions = {};
-  Map<String, bool?> _isSOSAlertShowing = {}; // Changed to nullable bool
+  Map<String, bool?> _isSOSAlertShowing = {};
   Map<String, Timer?> _sosAlertTimers = {};
   Map<String, int> _sosNotificationIds = {};
   Map<String, Timer?> _sosTimers = {};
@@ -75,11 +76,13 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Map<String, StreamSubscription?> _sosActiveSubscriptions = {};
-  Map<String, bool> _isFirstSOSSync = {}; // تتبع أول تحميل لكل طفل
-  Map<String, bool?> _lastSOSValue = {}; // تتبع آخر قيمة isSOSActive لكل طفل
+  Map<String, bool> _isFirstSOSSync = {};
+  Map<String, bool?> _lastSOSValue = {};
 
   Map<String, StreamSubscription?> _safeSubscriptions = {};
   Map<String, bool?> _lastSafeValue = {};
+
+  DateTime? _suppressSafeZoneNotificationsUntil;
 
   @override
   void initState() {
@@ -88,16 +91,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _childrenRef = FirebaseDatabase.instance.ref('users/${user!.uid}/children');
     _watchesRef = FirebaseDatabase.instance.ref('watches');
 
-    // Initialize notifications
     _initializeNotifications();
 
-    // Initialize SOS alerts
     _initializeSOSAlerts();
 
-    // Start listening to data
     _subscribeToData();
 
-    // Add a timer to refresh data periodically
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) {
         _subscribeToData();
@@ -124,8 +123,6 @@ class _HomeScreenState extends State<HomeScreen> {
             event.snapshot.value as Map,
           );
 
-          // Merge new data from Firebase with the existing local state to preserve
-          // dynamic fields like 'isConnected' and 'lastUpdate' during rebuilds.
           final mergedChildrenData = <String, dynamic>{};
           newChildrenData.forEach((childId, newChildData) {
             final existingChildData = _childrenData[childId] as Map? ?? {};
@@ -135,20 +132,17 @@ class _HomeScreenState extends State<HomeScreen> {
             };
           });
 
-          // Update children data
           setState(() {
-            _childrenData = mergedChildrenData; // Use merged data
+            _childrenData = mergedChildrenData;
             _loading = false;
             print('DEBUG: _childrenData after refresh:');
             mergedChildrenData.forEach((k, v) => print('  $k: $v'));
           });
 
-          // Add SOS listeners for each child
           mergedChildrenData.forEach((childId, childData) {
             _sosActiveSubscriptions[childId]?.cancel();
             final sosRef = _childrenRef.child(childId).child('isSOSActive');
-            _isFirstSOSSync[childId] =
-                _isFirstSOSSync[childId] ?? true; // فقط إذا لم يكن موجودًا
+            _isFirstSOSSync[childId] = _isFirstSOSSync[childId] ?? true;
             _sosActiveSubscriptions[childId] = sosRef.onValue.listen((
               sosEvent,
             ) {
@@ -162,7 +156,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 _isFirstSOSSync[childId] = false;
                 return;
               }
-              // إعادة تعيين حالة الإشعار عند إطفاء الزر
               if (value == false && _lastSOSValue[childId] == true) {
                 _isSOSAlertShowing[childId] = false;
               }
@@ -173,58 +166,42 @@ class _HomeScreenState extends State<HomeScreen> {
               _lastSOSValue[childId] = value;
             });
 
-            // إضافة اشتراك على حقل safe لكل طفل
             _safeSubscriptions[childId]?.cancel();
             final safeRef = _childrenRef.child(childId).child('safe');
             _lastSafeValue[childId] = _lastSafeValue[childId] ?? true;
             _safeSubscriptions[childId] = safeRef.onValue.listen((safeEvent) {
               if (!mounted) return;
-              final value = safeEvent.snapshot.value == true;
-              print(
-                'DEBUG: safe for $childId changed to $value (lastSafe=${_lastSafeValue[childId]})',
-              );
-              // إشعار عند الخروج من المنطقة الآمنة
-              if (_lastSafeValue[childId] == true && value == false) {
-                print(
-                  'DEBUG: Zone Alert Triggered for $childId from HomeScreen',
-                );
-                final notificationId = 2000 + childId.hashCode;
-                showSystemNotificationWithAutoCancel(
-                  notificationId: notificationId,
-                  title: 'خارج المنطقة الآمنة',
-                  body: '${childData['name']} خرج من المنطقة الآمنة.',
-                );
-                _showNotification(
-                  'خارج المنطقة الآمنة',
-                  '${childData['name']} خرج من المنطقة الآمنة.',
-                  isAlert: true,
-                  childId: childId,
-                );
+
+              // Skip notification if watch is being removed
+              if (_isRemovingWatch) {
+                return;
               }
-              // إشعار عند الدخول للمنطقة الآمنة
-              if (_lastSafeValue[childId] == false && value == true) {
-                print(
-                  'DEBUG: Safe Alert Triggered for $childId from HomeScreen',
-                );
-                final notificationId = 3000 + childId.hashCode;
-                showSystemNotificationWithAutoCancel(
-                  notificationId: notificationId,
-                  title: 'داخل المنطقة الآمنة',
-                  body: '${childData['name']} دخل المنطقة الآمنة.',
-                );
-                _showNotification(
-                  'داخل المنطقة الآمنة',
-                  '${childData['name']} دخل المنطقة الآمنة.',
-                  isAlert: true,
-                  childId: childId,
-                );
+
+              final value = safeEvent.snapshot.value == true;
+              if (_lastSafeValue[childId] == true && value == false) {
+                // Only show notification if watch is still connected
+                if (_childrenData[childId]?['isConnected'] == true) {
+                  print(
+                    'DEBUG: Zone Alert Triggered for $childId from HomeScreen',
+                  );
+                  showSystemNotificationWithAutoCancel(
+                    notificationId: 1002, // Fixed ID for safe zone exit
+                    title: 'Out of Safe Zone',
+                    body: '${childData['name']} has left the safe zone.',
+                  );
+                  _showNotification(
+                    'Out of Safe Zone',
+                    '${childData['name']} has left the safe zone.',
+                    isAlert: true,
+                    childId: childId,
+                  );
+                }
               }
               _lastSafeValue[childId] = value;
             });
           });
 
-          // Update watch subscriptions
-          _updateWatchSubscriptions(mergedChildrenData); // Use merged data
+          _updateWatchSubscriptions(mergedChildrenData);
         } else {
           _clearAllSubscriptions();
           setState(() {
@@ -261,12 +238,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _initializeSOSAlerts() {
-    // Initialize all SOS alert states to false
     _childrenData.forEach((childId, childData) {
       _isSOSAlertShowing[childId] = false;
     });
 
-    // Also initialize any existing watches
     _watchSubscriptions.forEach((macAddress, subscription) {
       final childId =
           _childrenData.entries
@@ -285,31 +260,26 @@ class _HomeScreenState extends State<HomeScreen> {
   void _updateWatchSubscriptions(Map<String, dynamic> newChildren) {
     if (!mounted) return;
 
-    // Get current MAC addresses from subscriptions
     final currentMacs = _watchSubscriptions.keys.toSet();
-    // Get MAC addresses from new children data
     final newMacs =
         newChildren.values
             .where((data) => data['macAddress'] != null)
             .map((data) => data['macAddress'] as String)
             .toSet();
 
-    // Cancel subscriptions for removed watches
     currentMacs.difference(newMacs).forEach((macAddress) {
       _watchSubscriptions[macAddress]?.cancel();
       _watchSubscriptions.remove(macAddress);
     });
 
-    // Add subscriptions for new watches
     newMacs.difference(currentMacs).forEach((macAddress) {
       final subscription = _watchesRef.child(macAddress).onValue.listen((
         watchEvent,
-      ) {
+      ) async {
         if (!mounted || !watchEvent.snapshot.exists) return;
 
         final watchData = watchEvent.snapshot.value as Map;
 
-        // Verify that the watch is linked to the current user
         if (user == null || watchData['userId'] != user!.uid) {
           return;
         }
@@ -326,9 +296,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (lastUpdate != null) {
           final timeDiff = DateTime.now().millisecondsSinceEpoch - lastUpdate;
-          final isConnected = timeDiff < 30000; // 30 seconds
+          final isConnected = timeDiff < 30000;
 
-          // Find the corresponding child ID
           final childId =
               newChildren.entries
                   .firstWhere(
@@ -338,7 +307,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   .key;
 
           if (childId.isNotEmpty) {
-            // Update location from watches node
+            if (isConnected) {
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.remove(
+                'watch_connected_notified_$childId',
+              ); // TEMP: Remove after testing
+              final notifKey = 'watch_connected_notified_$childId';
+              final alreadyNotified = prefs.getBool(notifKey) ?? false;
+              if (!alreadyNotified) {
+                print(
+                  'DEBUG: Showing watch connected notification for $childId',
+                );
+                _showNotification(
+                  'Watch Connected',
+                  '${_childrenData[childId]['name'] ?? 'A watch'} is now connected.',
+                  isAlert: false,
+                  childId: childId,
+                );
+                await prefs.setBool(notifKey, true);
+              }
+            }
+
             final location = watchData['location'];
             if (location != null) {
               final lat = location['latitude'] ?? location['lat'];
@@ -350,16 +339,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 'timestamp': lastUpdate,
               };
 
-              // Update location in Firebase children node
               FirebaseDatabase.instance
                   .ref()
                   .child('users/${user!.uid}/children/$childId/location')
                   .update(locationData);
 
-              // Update local state with new location
               _childrenData[childId]['location'] = locationData;
 
-              // --- Auto-set safeZone with the first valid location from the watch ---
               final currentSafeZone = _childrenData[childId]['safeZone'];
               bool shouldSetDefaultSafeZone = false;
               if (currentSafeZone == null) {
@@ -392,9 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     .set(defaultSafeZone);
                 _childrenData[childId]['safeZone'] = defaultSafeZone;
               }
-              // --- END ---
 
-              // Safe Zone Logic
               final childData = _childrenData[childId];
               if (childData != null && childData['safeZone'] != null) {
                 final safeZone = childData['safeZone'];
@@ -416,28 +400,37 @@ class _HomeScreenState extends State<HomeScreen> {
                     print(
                       'DEBUG: Zone Alert Triggered for $childId | wasSafe=$wasSafe, isSafe=$isSafe, name=${childData['name']}, lat=$lat, lon=$lon, centerLat=$centerLat, centerLon=$centerLon, radius=$radius',
                     );
-                    // إشعار نظامي مع صوت لمدة 5 ثواني عند الخروج من المنطقة الآمنة
                     final notificationId = 2000 + childId.hashCode;
                     () async {
-                      await flutterLocalNotificationsPlugin.show(
-                        notificationId,
-                        'Zone Alert',
-                        '${childData['name']} has left the safe zone.',
-                        NotificationDetails(
-                          android: AndroidNotificationDetails(
-                            'zone_channel',
-                            'Zone Alerts',
-                            importance: Importance.max,
-                            priority: Priority.high,
-                            playSound: true,
+                      if (_isRemovingWatch ||
+                          (_suppressSafeZoneNotificationsUntil != null &&
+                              DateTime.now().isBefore(
+                                _suppressSafeZoneNotificationsUntil!,
+                              ))) {
+                        print(
+                          'DEBUG: Skipping system notification due to removal or cooldown',
+                        );
+                      } else {
+                        await flutterLocalNotificationsPlugin.show(
+                          notificationId,
+                          'Zone Alert',
+                          '${childData['name']} has left the safe zone.',
+                          NotificationDetails(
+                            android: AndroidNotificationDetails(
+                              'zone_channel',
+                              'Zone Alerts',
+                              importance: Importance.max,
+                              priority: Priority.high,
+                              playSound: true,
+                            ),
                           ),
-                        ),
-                      );
-                      // إلغاء الإشعار بعد 5 ثواني
-                      Future.delayed(Duration(seconds: 5), () {
-                        flutterLocalNotificationsPlugin.cancel(notificationId);
-                      });
-                      // إشعار داخل التطبيق
+                        );
+                        Future.delayed(Duration(seconds: 5), () {
+                          flutterLocalNotificationsPlugin.cancel(
+                            notificationId,
+                          );
+                        });
+                      }
                       _showNotification(
                         'Zone Alert',
                         '${childData['name']} has left the safe zone.',
@@ -450,7 +443,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               }
 
-              // NEW: Sync safeZone from watch to child node
               final safeZone = watchData['safeZone'];
               if (safeZone != null &&
                   (_childrenData[childId]['safeZone'] == null)) {
@@ -465,12 +457,9 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _childrenData[childId]['isConnected'] = isConnected;
               _childrenData[childId]['lastUpdate'] = lastUpdate;
-              // _childrenData[childId]['batteryLevel'] =
-              //     watchData['batteryLevel'] as int? ?? 100;
               _childrenData[childId]['isSOSActive'] =
                   watchData['sos'] as bool? ?? false;
             });
-            // مزامنة حالة SOS مع مسار الطفل تحت المستخدم
             final sosActive = watchData['sos'] as bool? ?? false;
             FirebaseDatabase.instance
                 .ref()
@@ -483,14 +472,12 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Helper method to safely get SOS alert state
   bool _getSOSAlertState(String childName) {
     return _isSOSAlertShowing[childName] ?? false;
   }
 
   void _handleSOSAlert(String childName) async {
     print('DEBUG: _handleSOSAlert called for $childName');
-    // إشعار نظامي فوري عند كل SOS
     await flutterLocalNotificationsPlugin.show(
       1000 + childName.hashCode,
       'SOS Alert',
@@ -504,30 +491,22 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
-    // أضف إشعار SOS إلى قائمة الأنشطة داخل التطبيق
     _showNotification(
       'SOS Alert',
       'SOS button is active for $childName',
       isAlert: true,
       childId: childName,
     );
-    // إعادة تعيين isSOSActive إلى false بعد الإشعار
     await _childrenRef.child(childName).child('isSOSActive').set(false);
-    // Get the current SOS state
     final isShowing = _getSOSAlertState(childName);
 
-    // If already showing, return
     if (isShowing) return;
 
-    // Get the notification ID for this child
     final notificationId = _sosNotificationIds[childName] ?? childName.hashCode;
 
-    // Update SOS state
     _isSOSAlertShowing[childName] = true;
 
-    // Show a centered red warning dialog inside the app
     if (mounted) {
-      // Close any open dialog first
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
       }
@@ -589,7 +568,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
       );
-      // Auto-dismiss the dialog after 4 seconds
       Future.delayed(Duration(seconds: 4), () {
         if (mounted && Navigator.canPop(context)) {
           Navigator.pop(context);
@@ -597,10 +575,8 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    // Store the notification ID
     _sosNotificationIds[childName] = notificationId;
 
-    // Start repeating notification timer
     _sosAlertTimers[childName]?.cancel();
     _sosAlertTimers[childName] = Timer.periodic(const Duration(seconds: 30), (
       timer,
@@ -610,7 +586,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Get current SOS state
       final isStillShowing = _getSOSAlertState(childName);
 
       if (isStillShowing) {
@@ -633,19 +608,15 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // Reset SOS status after 30 seconds if not cleared
     Timer(const Duration(seconds: 30), () {
-      // Get current SOS state
       final isStillShowing = _getSOSAlertState(childName);
 
       if (isStillShowing) {
-        // Reset SOS state
         _isSOSAlertShowing[childName] = false;
         _sosAlertTimers[childName]?.cancel();
         _sosAlertTimers.remove(childName);
         _sosNotificationIds.remove(childName);
 
-        // Clear the notification
         flutterLocalNotificationsPlugin.cancel(notificationId);
       }
     });
@@ -660,6 +631,12 @@ class _HomeScreenState extends State<HomeScreen> {
     String? titleAr,
     String? messageAr,
   }) {
+    if (_isRemovingWatch) {
+      print(
+        'DEBUG: Skipping in-app notification because _isRemovingWatch is true',
+      );
+      return;
+    }
     if (mounted) {
       final activity = Activity(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -672,7 +649,7 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       setState(() {
-        _activities.insert(0, activity); // Add to the beginning of the list
+        _activities.insert(0, activity);
         _unreadNotifications++;
       });
 
@@ -683,7 +660,7 @@ class _HomeScreenState extends State<HomeScreen> {
             backgroundColor: isAlert ? Colors.red : Colors.blue,
             duration: Duration(seconds: 5),
             action: SnackBarAction(
-              label: 'عرض',
+              label: 'Show',
               textColor: Colors.white,
               onPressed: () {
                 if (childId != null) {
@@ -695,8 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
 
-      // إشعار نظامي في كل الحالات
-      final notificationId = DateTime.now().millisecondsSinceEpoch;
+      final notificationId = Random().nextInt(100000);
       flutterLocalNotificationsPlugin.show(
         notificationId,
         title,
@@ -736,7 +712,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final notificationId = DateTime.now().millisecondsSinceEpoch;
 
-    // حفظ ID الإشعار للطفل
     setState(() {
       _sosNotificationIds[childId] = notificationId;
     });
@@ -749,7 +724,6 @@ class _HomeScreenState extends State<HomeScreen> {
       payload: childId,
     );
 
-    // إنشاء مؤقت لإعادة تعيين الإشعار بعد 30 ثانية
     Timer(Duration(seconds: 30), () {
       if (mounted) {
         setState(() {
@@ -770,10 +744,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     print(
       'HomeScreen Log: Inside _showNativeSOSNotification. _notificationsEnabled: $_notificationsEnabled',
-    ); // Log inside the function
+    );
 
     final notificationId = childId.hashCode;
-    _sosNotificationIds[childId] = notificationId; // Store notification ID
+    _sosNotificationIds[childId] = notificationId;
 
     final notificationDetails = NotificationDetails(
       android: AndroidNotificationDetails(
@@ -804,7 +778,6 @@ class _HomeScreenState extends State<HomeScreen> {
       notificationDetails,
     );
 
-    // Start repeating notification if it's not already showing
     if (!_getSOSAlertState(childName)) {
       _isSOSAlertShowing[childName] = true;
       _sosAlertTimers[childName]?.cancel();
@@ -848,10 +821,7 @@ class _HomeScreenState extends State<HomeScreen> {
         context: context,
         builder:
             (context) => AlertDialog(
-              backgroundColor:
-                  Theme.of(context)
-                      .colorScheme
-                      .surfaceVariant, // Use theme surface variant for dialog background
+              backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -859,10 +829,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 'Notifications',
                 style: GoogleFonts.nunito(
                   fontWeight: FontWeight.bold,
-                  color:
-                      Theme.of(context)
-                          .colorScheme
-                          .onSurfaceVariant, // Text color for dialog title
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               content: SingleChildScrollView(
@@ -877,18 +844,13 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color:
-                                      Theme.of(
-                                        context,
-                                      ).cardColor, // Use theme card color
+                                  color: Theme.of(context).cardColor,
                                   borderRadius: BorderRadius.circular(12),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withOpacity(
-                                        0.05,
-                                      ), // Shadow color from theme
+                                      ).colorScheme.onSurface.withOpacity(0.05),
                                       blurRadius: 6,
                                       offset: const Offset(0, 2),
                                     ),
@@ -958,10 +920,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     'Clear All',
                     style: GoogleFonts.nunito(
-                      color:
-                          Theme.of(
-                            context,
-                          ).colorScheme.error, // Use theme error color
+                      color: Theme.of(context).colorScheme.error,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -978,10 +937,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(
                     'Close',
                     style: GoogleFonts.nunito(
-                      color:
-                          Theme.of(
-                            context,
-                          ).colorScheme.primary, // Use theme primary color
+                      color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -1042,13 +998,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     print('HomeScreen Log: build called.');
     return Scaffold(
-      backgroundColor:
-          Theme.of(
-            context,
-          ).colorScheme.background, // Use theme background color
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        backgroundColor:
-            Theme.of(context).colorScheme.primary, // Use theme primary color
+        backgroundColor: Theme.of(context).colorScheme.primary,
         automaticallyImplyLeading: false,
         elevation: 0,
         leading: IconButton(
@@ -1119,10 +1071,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color:
-                      Theme.of(
-                        context,
-                      ).colorScheme.primary, // Use theme primary color
+                  color: Theme.of(context).colorScheme.primary,
                   borderRadius: const BorderRadius.only(
                     bottomLeft: Radius.circular(40),
                     bottomRight: Radius.circular(40),
@@ -1260,7 +1209,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-
             ],
           ),
         ),
@@ -1272,7 +1220,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> cards = [];
     final pairedWatches = _childrenData.entries.toList();
 
-    // Add cards for paired watches
     for (var entry in pairedWatches) {
       final watchId = entry.key;
       final watchData = entry.value;
@@ -1304,7 +1251,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    // Add "Connect Watch" cards for remaining slots (up to 2 total)
     int remainingSlots = 2 - pairedWatches.length;
     for (int i = 0; i < remainingSlots; i++) {
       cards.add(
@@ -1425,7 +1371,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     print('HomeScreen Log: _navigateToWatchSettings called for $watchId.');
 
-    // Ensure we're not already navigating
     if (_isNavigatingToSettings) return;
 
     setState(() {
@@ -1433,7 +1378,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // Use a local variable to capture the context
       final localContext = context;
 
       Navigator.push(
@@ -1448,16 +1392,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           )
           .then((result) {
-            // Only update state if we're still mounted
             if (mounted) {
               setState(() {
                 _isNavigatingToSettings = false;
               });
 
-              // Always refresh from Firebase after returning from settings
               _subscribeToData();
 
-              // (Optional) If you want to keep the cached update logic for rare cases, keep it below
               if (_cachedWatchUpdateData != null) {
                 print(
                   'HomeScreen Log: Processing cached data: $_cachedWatchUpdateData',
@@ -1473,7 +1414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   });
                 }
-                _cachedWatchUpdateData = null; // Clear cached data
+                _cachedWatchUpdateData = null;
               }
             }
           })
@@ -1496,26 +1437,45 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _removeWatch(String watchId) {
-    print('HomeScreen Log: _removeWatch called for $watchId.');
-
-    // Ensure we're not already removing
     if (_isRemovingWatch) return;
 
+    print('DEBUG: _removeWatch called for $watchId');
     setState(() {
       _isRemovingWatch = true;
     });
+    ScaffoldMessenger.of(context).clearSnackBars();
+
+    // Cancel any lingering zone notifications for this watch
+    final notificationId = 2000 + watchId.hashCode;
+    flutterLocalNotificationsPlugin.cancel(notificationId);
+
+    // Suppress safe zone notifications for 2 seconds after removal starts
+    _suppressSafeZoneNotificationsUntil = DateTime.now().add(
+      Duration(seconds: 2),
+    );
+    Future.delayed(Duration(seconds: 2), () {
+      _suppressSafeZoneNotificationsUntil = null;
+    });
+
+    // Cancel all listeners for this watch before removing to prevent notifications
+    print('DEBUG: Cancelling listeners for $watchId');
+    _safeSubscriptions[watchId]?.cancel();
+    _safeSubscriptions.remove(watchId);
+    _sosActiveSubscriptions[watchId]?.cancel();
+    _sosActiveSubscriptions.remove(watchId);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        print('HomeScreen Log: _removeWatch failed - User not logged in');
+        if (mounted) setState(() => _isRemovingWatch = false);
         return;
       }
 
+      // Remove from Firebase
       final watchRef = FirebaseDatabase.instance.ref(
         'users/${user.uid}/children/$watchId',
       );
-
+      print('DEBUG: Removing watch data from Firebase for $watchId');
       watchRef
           .remove()
           .then((_) {
@@ -1524,18 +1484,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 _childrenData.remove(watchId);
                 _isRemovingWatch = false;
               });
+              print(
+                'DEBUG: Watch $watchId removed, notification will be shown.',
+              );
+              _showNotification(
+                'Watch Removed',
+                'Successfully removed watch.',
+                isAlert: false,
+              );
             }
           })
           .catchError((error) {
-            print('HomeScreen Log: Error removing watch: $error');
             if (mounted) {
               setState(() {
                 _isRemovingWatch = false;
               });
+              print('DEBUG: Error removing watch $watchId: $error');
+              _showNotification(
+                'Error',
+                'Failed to remove watch: $error',
+                isAlert: true,
+              );
             }
           });
     } catch (error) {
-      print('HomeScreen Log: Error in _removeWatch: $error');
       if (mounted) {
         setState(() {
           _isRemovingWatch = false;
@@ -1568,7 +1540,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadNotificationSetting() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return; // User not logged in
+    if (user == null) return;
 
     try {
       final snapshot =
@@ -1577,9 +1549,7 @@ class _HomeScreenState extends State<HomeScreen> {
               .get();
       if (snapshot.exists) {
         setState(() {
-          _notificationsEnabled =
-              snapshot.value as bool? ??
-              true; // Default to true if value is null
+          _notificationsEnabled = snapshot.value as bool? ?? true;
         });
         print(
           'HomeScreen Log: Loaded notificationsEnabled: $_notificationsEnabled',
@@ -1591,13 +1561,12 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (e) {
       print('HomeScreen Log: Error loading notification setting: $e');
-      // Optionally show an error to the user
     }
   }
 
   void _subscribeToNotificationSettingChanges() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return; // User not logged in
+    if (user == null) return;
 
     _notificationSettingsSubscription = FirebaseDatabase.instance
         .ref('users/${user.uid}/settings/notificationsEnabled')
@@ -1651,14 +1620,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _childrenSubscription?.cancel();
     _watchSubscriptions.forEach((_, subscription) => subscription.cancel());
     _watchSubscriptions.clear();
-    // ألغِ جميع اشتراكات SOS
     _sosActiveSubscriptions.forEach((childId, sub) {
       sub?.cancel();
-      _isFirstSOSSync.remove(childId); // احذف من تتبع أول تحميل
-      _lastSOSValue.remove(childId); // احذف آخر قيمة
+      _isFirstSOSSync.remove(childId);
+      _lastSOSValue.remove(childId);
     });
     _sosActiveSubscriptions.clear();
-    // ألغِ جميع اشتراكات safe
     _safeSubscriptions.forEach((childId, sub) => sub?.cancel());
     _safeSubscriptions.clear();
   }
@@ -1667,10 +1634,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _childrenSubscription?.cancel();
     _refreshTimer?.cancel();
-    // ألغِ جميع اشتراكات SOS عند التخلص من الشاشة
     _sosActiveSubscriptions.forEach((childId, sub) => sub?.cancel());
     _sosActiveSubscriptions.clear();
-    // ألغِ جميع اشتراكات safe
     _safeSubscriptions.forEach((childId, sub) => sub?.cancel());
     _safeSubscriptions.clear();
     super.dispose();
@@ -1688,12 +1653,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // دالة لإظهار إشعار نظامي مع صوت النظام الافتراضي ويختفي بعد 5 ثواني
   Future<void> showSystemNotificationWithAutoCancel({
     required int notificationId,
     required String title,
     required String body,
   }) async {
+    if (_isRemovingWatch ||
+        (_suppressSafeZoneNotificationsUntil != null &&
+            DateTime.now().isBefore(_suppressSafeZoneNotificationsUntil!))) {
+      print('DEBUG: Skipping system notification due to removal or cooldown');
+      return;
+    }
     await flutterLocalNotificationsPlugin.show(
       notificationId,
       title,
@@ -1702,14 +1672,13 @@ class _HomeScreenState extends State<HomeScreen> {
         android: AndroidNotificationDetails(
           'zone_channel',
           'Zone Alerts',
-          channelDescription: 'تنبيهات المنطقة الآمنة',
+          channelDescription: 'Safe Zone Alerts',
           importance: Importance.max,
           priority: Priority.high,
-          playSound: true, // صوت النظام الافتراضي
+          playSound: true,
         ),
       ),
     );
-    // إلغاء الإشعار بعد 5 ثواني
     Future.delayed(const Duration(seconds: 5), () {
       flutterLocalNotificationsPlugin.cancel(notificationId);
     });
