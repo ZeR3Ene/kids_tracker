@@ -46,6 +46,21 @@ class _MapScreenState extends State<MapScreen> {
   Timer? _flashTimer;
   bool _showRedBackground = false;
   String? _selectedChildId;
+
+  double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const R = 6371000; // Earth radius in meters
+    final dLat = (lat2 - lat1) * pi / 180;
+    final dLon = (lon2 - lon1) * pi / 180;
+    final a =
+        sin(dLat / 2) * sin(dLat / 2) +
+        cos(lat1 * pi / 180) *
+            cos(lat2 * pi / 180) *
+            sin(dLon / 2) *
+            sin(dLon / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return R * c;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +117,8 @@ class _MapScreenState extends State<MapScreen> {
                   childData['location'] as Map<dynamic, dynamic>?;
               final safeZoneData =
                   childData['safeZone'] as Map<dynamic, dynamic>?;
+              final startLocation =
+                  childData['startLocation'] as Map<dynamic, dynamic>?;
 
               bool isSafe = true; // Assume safe initially
 
@@ -221,7 +238,66 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                     icon: BitmapDescriptor.defaultMarkerWithHue(markerHue),
                     onTap: () {
-                      print('MapScreen: Marker for $childId tapped.');
+                      print('MapScreen: Card for $childId tapped.');
+                      final safeZoneData =
+                          childData['safeZone'] as Map<dynamic, dynamic>?;
+                      if (safeZoneData != null) {
+                        final centerLat =
+                            (safeZoneData['latitude'] as num?)?.toDouble();
+                        final centerLng =
+                            (safeZoneData['longitude'] as num?)?.toDouble();
+                        final radius = safeZoneData['radius'];
+                        if (centerLat != null &&
+                            centerLng != null &&
+                            radius != null) {
+                          final center = LatLng(centerLat, centerLng);
+                          final double radiusDouble =
+                              (radius is num) ? radius.toDouble() : 0.0;
+                          print(
+                            'MapScreen: Zooming to safe zone for $childId from card tap.',
+                          );
+                          _mapController?.animateCamera(
+                            CameraUpdate.newLatLngZoom(
+                              center,
+                              _getZoomLevelForRadius(radiusDouble),
+                            ),
+                          );
+                        } else {
+                          // If safe zone data is incomplete, just center on the child's location
+                          final locationData =
+                              childData['location'] as Map<dynamic, dynamic>?;
+                          if (locationData != null) {
+                            final lat =
+                                (locationData['latitude'] as num?)?.toDouble();
+                            final lng =
+                                (locationData['longitude'] as num?)?.toDouble();
+                            if (lat != null && lng != null) {
+                              final position = LatLng(lat, lng);
+                              print(
+                                'MapScreen: Incomplete safe zone, centering on child from card tap.',
+                              );
+                              _centerMap(position);
+                            }
+                          }
+                        }
+                      } else {
+                        // If no safe zone data, just center on the child's location
+                        final locationData =
+                            childData['location'] as Map<dynamic, dynamic>?;
+                        if (locationData != null) {
+                          final lat =
+                              (locationData['latitude'] as num?)?.toDouble();
+                          final lng =
+                              (locationData['longitude'] as num?)?.toDouble();
+                          if (lat != null && lng != null) {
+                            final position = LatLng(lat, lng);
+                            print(
+                              'MapScreen: No safe zone, centering on child from card tap.',
+                            );
+                            _centerMap(position);
+                          }
+                        }
+                      }
                       setState(() {
                         _selectedChildId = childId;
                       });
@@ -265,6 +341,31 @@ class _MapScreenState extends State<MapScreen> {
                 }
               } else {
                 print('MapScreen: No location data for $childId');
+              }
+
+              if (locationData != null && startLocation == null) {
+                final lat = locationData['latitude'] ?? locationData['lat'];
+                final lng = locationData['longitude'] ?? locationData['lng'];
+                if (lat != null && lng != null) {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user != null) {
+                    final childRef = FirebaseDatabase.instance
+                        .ref()
+                        .child('users')
+                        .child(user.uid)
+                        .child('children')
+                        .child(childId);
+                    childRef.child('startLocation').set({
+                      'lat': lat,
+                      'lng': lng,
+                    });
+                    print(
+                      'DEBUG: Set startLocation for $childId: ($lat, $lng)',
+                    );
+                    // Also update in local data so UI shows immediately
+                    childData['startLocation'] = {'lat': lat, 'lng': lng};
+                  }
+                }
               }
 
               _childrenData[childId.toString()] = childData;
@@ -514,6 +615,79 @@ class _MapScreenState extends State<MapScreen> {
                                     isSafe
                                         ? Colors.green[700]
                                         : Colors.red[700];
+
+                                final startLoc = childData['startLocation'];
+                                final currentLoc = childData['location'];
+                                double? distance;
+                                double? bearing;
+                                String? direction;
+                                if (startLoc != null && currentLoc != null) {
+                                  final startLat =
+                                      (startLoc['lat'] ?? startLoc['latitude'])
+                                          ?.toDouble();
+                                  final startLng =
+                                      (startLoc['lng'] ?? startLoc['longitude'])
+                                          ?.toDouble();
+                                  final currLat =
+                                      (currentLoc['latitude'] ??
+                                              currentLoc['lat'])
+                                          ?.toDouble();
+                                  final currLng =
+                                      (currentLoc['longitude'] ??
+                                              currentLoc['lng'])
+                                          ?.toDouble();
+                                  if (startLat != null &&
+                                      startLng != null &&
+                                      currLat != null &&
+                                      currLng != null) {
+                                    distance = calculateDistance(
+                                      startLat,
+                                      startLng,
+                                      currLat,
+                                      currLng,
+                                    );
+                                    // Calculate bearing
+                                    final dLon =
+                                        (currLng - startLng) * (pi / 180.0);
+                                    final y =
+                                        sin(dLon) * cos(currLat * (pi / 180.0));
+                                    final x =
+                                        cos(startLat * (pi / 180.0)) *
+                                            sin(currLat * (pi / 180.0)) -
+                                        sin(startLat * (pi / 180.0)) *
+                                            cos(currLat * (pi / 180.0)) *
+                                            cos(dLon);
+                                    bearing =
+                                        (atan2(y, x) * 180.0 / pi + 360.0) %
+                                        360.0;
+                                    // Convert bearing to direction
+                                    if (bearing != null) {
+                                      if (bearing! >= 337.5 || bearing! < 22.5)
+                                        direction = 'North';
+                                      else if (bearing! >= 22.5 &&
+                                          bearing! < 67.5)
+                                        direction = 'North-East';
+                                      else if (bearing! >= 67.5 &&
+                                          bearing! < 112.5)
+                                        direction = 'East';
+                                      else if (bearing! >= 112.5 &&
+                                          bearing! < 157.5)
+                                        direction = 'South-East';
+                                      else if (bearing! >= 157.5 &&
+                                          bearing! < 202.5)
+                                        direction = 'South';
+                                      else if (bearing! >= 202.5 &&
+                                          bearing! < 247.5)
+                                        direction = 'South-West';
+                                      else if (bearing! >= 247.5 &&
+                                          bearing! < 292.5)
+                                        direction = 'West';
+                                      else if (bearing! >= 292.5 &&
+                                          bearing! < 337.5)
+                                        direction = 'North-West';
+                                    }
+                                  }
+                                }
 
                                 return Padding(
                                   padding: const EdgeInsets.symmetric(
@@ -773,6 +947,26 @@ class _MapScreenState extends State<MapScreen> {
                                                       ),
                                                     ],
                                                   ),
+                                                  if (distance != null)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            top: 4.0,
+                                                          ),
+                                                      child: Text(
+                                                        'Kid Movement: '
+                                                        '${distance! < 1000 ? '${distance!.toStringAsFixed(1)} m' : '${(distance! / 1000).toStringAsFixed(2)} km'}'
+                                                        '${direction != null ? ' ($direction)' : ''}',
+                                                        style: TextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color:
+                                                              Colors
+                                                                  .blueGrey[700],
+                                                        ),
+                                                      ),
+                                                    ),
                                                   if (childData['lastSeen'] !=
                                                       null)
                                                     Padding(
@@ -811,7 +1005,7 @@ class _MapScreenState extends State<MapScreen> {
                                               onPressed: () {
                                                 print(
                                                   'MapScreen: Location button tapped for $name.',
-                                                ); // Debug print
+                                                );
                                                 final locationData =
                                                     childData['location']
                                                         as Map<
@@ -833,69 +1027,12 @@ class _MapScreenState extends State<MapScreen> {
                                                       lat,
                                                       lng,
                                                     );
-                                                    // Also get safe zone data to zoom to circle
-                                                    final safeZoneData =
-                                                        childData['safeZone']
-                                                            as Map<
-                                                              dynamic,
-                                                              dynamic
-                                                            >?;
-                                                    if (safeZoneData != null) {
-                                                      final centerLat =
-                                                          (safeZoneData['latitude']
-                                                                  as num?)
-                                                              ?.toDouble();
-                                                      final centerLng =
-                                                          (safeZoneData['longitude']
-                                                                  as num?)
-                                                              ?.toDouble();
-                                                      final radius =
-                                                          safeZoneData['radius']; // Radius can be int or double
-
-                                                      if (centerLat != null &&
-                                                          centerLng != null &&
-                                                          radius != null) {
-                                                        final center = LatLng(
-                                                          centerLat,
-                                                          centerLng,
-                                                        );
-                                                        final double
-                                                        radiusDouble =
-                                                            (radius is num)
-                                                                ? radius
-                                                                    .toDouble()
-                                                                : 0.0;
-
-                                                        // Instead of centering on the child, center on the safe zone and adjust zoom
-                                                        print(
-                                                          'MapScreen: Attempting to zoom to safe zone for $name via button.',
-                                                        ); // Debug print
-                                                        _mapController?.animateCamera(
-                                                          CameraUpdate.newLatLngZoom(
-                                                            center,
-                                                            _getZoomLevelForRadius(
-                                                              radiusDouble,
-                                                            ),
-                                                          ),
-                                                        ); // Center on safe zone and adjust zoom
-                                                      } else {
-                                                        // If safe zone data is incomplete, just center on the child's location
-                                                        print(
-                                                          'MapScreen: Incomplete safe zone data for $name, centering on child via button.',
-                                                        ); // Debug print
-                                                        _centerMap(
-                                                          position,
-                                                        ); // Center map on child's location
-                                                      }
-                                                    } else {
-                                                      // If no safe zone data, just center on the child's location
-                                                      print(
-                                                        'MapScreen: No safe zone data for $name, centering on child via button.',
-                                                      ); // Debug print
-                                                      _centerMap(
-                                                        position,
-                                                      ); // Center map on child's location
-                                                    }
+                                                    print(
+                                                      'MapScreen: Centering map on child location for $name via pin.',
+                                                    );
+                                                    _centerMap(
+                                                      position,
+                                                    ); // Always center on child location only
                                                   }
                                                 }
                                               },

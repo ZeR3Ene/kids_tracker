@@ -132,6 +132,44 @@ class _HomeScreenState extends State<HomeScreen> {
             };
           });
 
+          mergedChildrenData.forEach((childId, childData) async {
+            final location = childData['location'];
+            final startLocation = childData['startLocation'];
+            final isStartLocZero =
+                startLocation != null &&
+                ((startLocation['lat'] == 0 && startLocation['lng'] == 0) ||
+                    (startLocation['latitude'] == 0 &&
+                        startLocation['longitude'] == 0));
+            final lat =
+                location != null
+                    ? (location['latitude'] ?? location['lat'])
+                    : null;
+            final lng =
+                location != null
+                    ? (location['longitude'] ?? location['lng'])
+                    : null;
+            if (location != null &&
+                (startLocation == null || isStartLocZero) &&
+                lat != null &&
+                lng != null &&
+                lat != 0 &&
+                lng != 0) {
+              final user = FirebaseAuth.instance.currentUser;
+              if (user != null) {
+                final childRef = FirebaseDatabase.instance.ref(
+                  'users/${user.uid}/children/$childId',
+                );
+                await childRef.child('startLocation').set({
+                  'lat': lat,
+                  'lng': lng,
+                });
+                print('DEBUG: Set startLocation for $childId: ($lat, $lng)');
+                // Also update in local data so UI shows immediately
+                childData['startLocation'] = {'lat': lat, 'lng': lng};
+              }
+            }
+          });
+
           setState(() {
             _childrenData = mergedChildrenData;
             _loading = false;
@@ -533,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
               content: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12.0),
                 child: Text(
-                  'SOS button ON for child $childName',
+                  'SOS button is pressed for child  $childName',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
@@ -1178,32 +1216,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 16),
                     CardTile(
-                      icon: Icons.directions_walk,
-                      color: Colors.green,
-                      title: 'Activity Tracking',
-                      subtitle: 'Monitor daily activities and movements',
-                      onTap: () {
-                        _showComingSoonDialog(context, 'Activity Tracking');
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    CardTile(
-                      icon: Icons.calendar_today,
-                      color: Colors.pink,
-                      title: 'School Schedule',
-                      subtitle: 'Integrate with school calendar',
-                      onTap: () {
-                        _showComingSoonDialog(context, 'School Schedule');
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    CardTile(
-                      icon: Icons.phone,
-                      color: Colors.teal,
-                      title: 'Emergency Contacts',
+                      icon: Icons.sms,
+                      color: Colors.blue,
+                      title: 'SIM Messages',
                       subtitle: 'Quick access to emergency numbers',
                       onTap: () {
-                        _showComingSoonDialog(context, 'Emergency Contacts');
+                        _showComingSoonDialog(context, 'SIM Messages');
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    CardTile(
+                      icon: Icons.history,
+                      color: Colors.deepPurple,
+                      title: 'Location History',
+                      subtitle: 'Review where your child has been',
+                      onTap: () {
+                        _showComingSoonDialog(context, 'Location History');
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    CardTile(
+                      icon: Icons.record_voice_over,
+                      color: Colors.orange,
+                      title: 'Voice Chat',
+                      subtitle: 'Send and receive voice messages',
+                      onTap: () {
+                        _showComingSoonDialog(context, 'Voice Chat');
                       },
                     ),
                   ],
@@ -1242,10 +1280,12 @@ class _HomeScreenState extends State<HomeScreen> {
               'avatar': watchData['avatar'],
               'lastUpdate': watchData['lastUpdate'],
               'safe': watchData['safe'],
+              'startLocation':
+                  watchData['startLocation'] ?? watchData['start_location'],
             },
             onSettings:
                 () => _navigateToWatchSettings(context, watchId: watchId),
-            timeFormatter: _formatTime,
+            // timeFormatter: _formatTime,
           ),
         ),
       );
@@ -1261,9 +1301,15 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: cards),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: cards),
+        ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 
@@ -1436,7 +1482,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _removeWatch(String watchId) {
+  Future<void> _removeWatch(String watchId) async {
     if (_isRemovingWatch) return;
 
     print('DEBUG: _removeWatch called for $watchId');
@@ -1476,6 +1522,8 @@ class _HomeScreenState extends State<HomeScreen> {
         'users/${user.uid}/children/$watchId',
       );
       print('DEBUG: Removing watch data from Firebase for $watchId');
+      // Explicitly remove startLocation before removing the watch node
+      await watchRef.child('startLocation').remove();
       watchRef
           .remove()
           .then((_) {
@@ -1686,21 +1734,16 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-  const double R = 6371000;
-  final double latRad1 = lat1 * pi / 180;
-  final double lonRad1 = lon1 * pi / 180;
-  final double latRad2 = lat2 * pi / 180;
-  final double lonRad2 = lon2 * pi / 180;
-
-  final double dLat = latRad2 - latRad1;
-  final double dLon = lonRad2 - lonRad1;
-
-  final double a =
+  const R = 6371000; // Earth radius in meters
+  final dLat = (lat2 - lat1) * pi / 180;
+  final dLon = (lon2 - lon1) * pi / 180;
+  final a =
       sin(dLat / 2) * sin(dLat / 2) +
-      cos(latRad1) * cos(latRad2) * sin(dLon / 2) * sin(dLon / 2);
-
-  final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
+      cos(lat1 * pi / 180) *
+          cos(lat2 * pi / 180) *
+          sin(dLon / 2) *
+          sin(dLon / 2);
+  final c = 2 * atan2(sqrt(a), sqrt(1 - a));
   return R * c;
 }
 
@@ -1774,14 +1817,14 @@ class WatchCard extends StatelessWidget {
   final String watchId;
   final Map? data;
   final VoidCallback onSettings;
-  final String Function(DateTime) timeFormatter;
+  //final String Function(DateTime) timeFormatter;
 
   const WatchCard({
     super.key,
     required this.watchId,
     required this.data,
     required this.onSettings,
-    required this.timeFormatter,
+    // required this.timeFormatter,
   });
 
   int _hexToColor(String hex) {
@@ -1818,23 +1861,61 @@ class WatchCard extends StatelessWidget {
         (DateTime.now().millisecondsSinceEpoch - lastUpdate) < 30000;
 
     Color watchColor =
-        isConnected && data!['color'] != null
+        data!['color'] != null
             ? Color(_hexToColor(data!['color'] as String))
             : Theme.of(context).colorScheme.primary;
 
-    Color avatarBackgroundColor =
-        isConnected && data!['color'] != null
-            ? watchColor.withOpacity(0.2)
-            : Theme.of(context).colorScheme.primary.withOpacity(0.2);
+    Color cardBackgroundColor = Theme.of(context).cardColor;
+    Color avatarBackgroundColor = watchColor;
+    Color watchIconColor = Colors.white;
+    Color textColor = Colors.black87;
 
-    Color watchIconColor =
-        isConnected && data!['color'] != null
-            ? watchColor
-            : Theme.of(context).colorScheme.primary;
-
-    print(
-      'Determined watchColor: $watchColor, avatarBackgroundColor: $avatarBackgroundColor, watchIconColor: $watchIconColor',
-    );
+    final startLoc = data?['startLocation'] ?? data?['start_location'];
+    final currentLoc = data?['lastLocation'] ?? data?['location'];
+    double? distance;
+    double? bearing;
+    String? direction;
+    if (startLoc != null && currentLoc != null) {
+      final startLat = (startLoc['lat'] ?? startLoc['latitude'])?.toDouble();
+      final startLng = (startLoc['lng'] ?? startLoc['longitude'])?.toDouble();
+      final currLat = (currentLoc['latitude'] ?? currentLoc['lat'])?.toDouble();
+      final currLng =
+          (currentLoc['longitude'] ?? currentLoc['lng'])?.toDouble();
+      if (startLat != null &&
+          startLng != null &&
+          currLat != null &&
+          currLng != null) {
+        distance = _calculateDistance(startLat, startLng, currLat, currLng);
+        // Calculate bearing
+        final dLon = (currLng - startLng) * (pi / 180.0);
+        final y = sin(dLon) * cos(currLat * (pi / 180.0));
+        final x =
+            cos(startLat * (pi / 180.0)) * sin(currLat * (pi / 180.0)) -
+            sin(startLat * (pi / 180.0)) *
+                cos(currLat * (pi / 180.0)) *
+                cos(dLon);
+        bearing = (atan2(y, x) * 180.0 / pi + 360.0) % 360.0;
+        // Convert bearing to direction
+        if (bearing != null) {
+          if (bearing! >= 337.5 || bearing! < 22.5)
+            direction = 'North';
+          else if (bearing! >= 22.5 && bearing! < 67.5)
+            direction = 'North-East';
+          else if (bearing! >= 67.5 && bearing! < 112.5)
+            direction = 'East';
+          else if (bearing! >= 112.5 && bearing! < 157.5)
+            direction = 'South-East';
+          else if (bearing! >= 157.5 && bearing! < 202.5)
+            direction = 'South';
+          else if (bearing! >= 202.5 && bearing! < 247.5)
+            direction = 'South-West';
+          else if (bearing! >= 247.5 && bearing! < 292.5)
+            direction = 'West';
+          else if (bearing! >= 292.5 && bearing! < 337.5)
+            direction = 'North-West';
+        }
+      }
+    }
 
     return Card(
       elevation: 4,
@@ -1845,6 +1926,10 @@ class WatchCard extends StatelessWidget {
         child: Container(
           width: 140,
           padding: const EdgeInsets.all(12.0),
+          decoration: BoxDecoration(
+            color: cardBackgroundColor,
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1859,38 +1944,28 @@ class WatchCard extends StatelessWidget {
                 style: GoogleFonts.nunito(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
-              Text(
-                isConnected ? 'Connected' : 'Not Connected',
-                style: TextStyle(
-                  fontSize: 12,
-                  color:
-                      isConnected
-                          ? Colors.green.shade600
-                          : Theme.of(
-                            context,
-                          ).colorScheme.onBackground.withOpacity(0.6),
-                ),
-              ),
-              if (lastUpdate != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  timeFormatter(
-                    DateTime.fromMillisecondsSinceEpoch(lastUpdate),
-                  ),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onBackground.withOpacity(0.5),
+              if (lastUpdate != null) ...[const SizedBox(height: 4)],
+              if (distance != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text(
+                    'Kid Movement: '
+                    '${distance! < 1000 ? '${distance!.toStringAsFixed(1)} m' : '${(distance! / 1000).toStringAsFixed(2)} km'}'
+                    '${direction != null ? ' ($direction)' : ''}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: watchColor,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              ],
             ],
           ),
         ),

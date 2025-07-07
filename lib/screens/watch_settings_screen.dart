@@ -165,6 +165,14 @@ class _WatchSettingsScreenState extends State<WatchSettingsScreen> {
 
       await watchRef.update(updates);
 
+      // Also update color in the global watches node if macAddress exists
+      if (macAddress != null) {
+        final globalWatchRef = FirebaseDatabase.instance.ref(
+          'watches/$macAddress',
+        );
+        await globalWatchRef.update({'color': _color});
+      }
+
       if (mounted) {
         setState(() {
           _loading = false;

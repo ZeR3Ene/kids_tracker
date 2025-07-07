@@ -191,6 +191,15 @@ class _QRPairScreenState extends State<QRPairScreen> {
               'longitude': position.longitude,
               'timestamp': DateTime.now().millisecondsSinceEpoch,
             },
+            // Only set startLocation if valid
+            ...(position.latitude != 0 && position.longitude != 0
+                ? {
+                  'startLocation': {
+                    'lat': position.latitude,
+                    'lng': position.longitude,
+                  },
+                }
+                : {}),
             'safeZone': {
               'latitude': position.latitude,
               'longitude': position.longitude,
