@@ -20,6 +20,7 @@ The application allows parents to monitor their child's location, receive alerts
 - Real-time GPS tracking  
 - Display location on Google Maps  
 - Safe zone alerts and notifications  
+- 🚨 SOS emergency alert system for instant notifications  
 - Activity monitoring and statistics  
 - Custom settings for each child  
 - Clean and responsive UI  
@@ -53,6 +54,7 @@ The application allows parents to monitor their child's location, receive alerts
 
 ### 4. Notifications  
 - Alerts are triggered when the child leaves a safe zone  
+- 🚨 SOS alerts are sent instantly to notify parents in emergency situations  
 
 ---
 
@@ -74,6 +76,6 @@ This project was developed as my graduation project in Computer Systems Engineer
 
 ## 📌 Future Improvements  
 - Improve location accuracy  
-- Add emergency (SOS) feature  
-- Enhance UI/UX  
+- Enhance tracking performance  
+- Improve UI/UX  
 - Support more wearable devices  
