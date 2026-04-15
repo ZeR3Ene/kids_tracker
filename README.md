@@ -1,58 +1,79 @@
-# 🛏️ Smart Crib for Infants  
+# 📍 Kids Tracker – Smart Child Tracking System  
 
 ## 📌 Project Description  
-Smart Crib for Infants is an intelligent system designed to monitor babies and respond automatically to their needs using AI and IoT technologies. The system analyzes the baby's condition through sound, sensors, and live video, then takes appropriate actions such as playing music or rocking the crib to soothe the baby.  
+Kids Tracker is a mobile application developed using Flutter to track children's smartwatches in real time. The system integrates ESP32, GPS, and Firebase to provide accurate location tracking and enhance child safety.  
+
+The application allows parents to monitor their child's location, receive alerts, and manage tracking features through a simple and user-friendly interface.  
 
 ---
 
 ## 🎯 Project Goals  
-- Real-time baby monitoring using a live-streaming camera  
-- Sound analysis to detect crying and send alerts to parents  
-- Automatic soothing using music, toys, and crib movement  
-- Mobile application for parents to monitor and control the system  
+- Real-time location tracking for children's smartwatches  
+- Provide safety alerts when the child leaves a defined area  
+- Enable parents to monitor their child easily through a mobile app  
+- Ensure a smooth and responsive user experience  
+
+---
+
+## ✨ Features  
+- User authentication (Google & Facebook)  
+- Real-time GPS tracking  
+- Display location on Google Maps  
+- Safe zone alerts and notifications  
+- Activity monitoring and statistics  
+- Custom settings for each child  
+- Clean and responsive UI  
 
 ---
 
 ## 🛠️ Technologies Used  
 
 ### 🔹 Hardware  
-- ESP32 / Raspberry Pi (main controller)  
-- Microphone for sound detection  
-- Camera for live streaming  
-- Temperature & humidity sensors  
-- Motors for crib movement  
-- Speakers for audio output  
+- ESP32  
+- GPS Module  
 
 ### 🔹 Software  
 - Flutter (mobile application)  
-- Firebase (real-time database & notifications)  
-- Python (basic AI/signal processing)  
-- REST APIs for communication  
+- Firebase (Authentication, Realtime Database)  
+- Google Maps API  
+- REST APIs  
 
 ---
 
 ## 🔍 How the System Works  
 
 ### 1. Data Collection  
-- The microphone captures the baby’s sounds  
-- Sensors measure environmental conditions  
-- The camera streams live video  
+- The smartwatch (ESP32 + GPS) collects location data  
 
-### 2. Processing  
-- Data is sent to the controller for analysis  
-- Crying is detected and processed  
+### 2. Data Transmission  
+- Data is sent to Firebase in real time  
 
-### 3. User Interaction  
-- Notifications are sent to the mobile app  
-- Parents can monitor and control the system  
+### 3. Application Layer  
+- The mobile app retrieves and displays the location on Google Maps  
 
-### 4. Automatic Response  
-- The system reacts automatically when needed:  
-  - Playing music  
-  - Activating soothing motion  
-  - Providing alerts to parents  
+### 4. Notifications  
+- Alerts are triggered when the child leaves a safe zone  
+
+---
+
+## 📂 Project Structure  
+
+lib/  
+├── main.dart  
+├── models/  
+├── screens/  
+├── widgets/  
+└── utils/  
 
 ---
 
 ## 🎓 About the Project  
-This project was developed as my graduation project in Computer Systems Engineering. It helped me strengthen my skills in IoT systems, mobile development using Flutter, and real-time data processing.  
+This project was developed as my graduation project in Computer Systems Engineering. It helped me strengthen my skills in mobile development using Flutter, IoT integration, and real-time data processing.  
+
+---
+
+## 📌 Future Improvements  
+- Improve location accuracy  
+- Add emergency (SOS) feature  
+- Enhance UI/UX  
+- Support more wearable devices  
